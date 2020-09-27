@@ -1,4 +1,4 @@
-# TelegramDeezerDeezer
+# TelegramMusicDeezer
 A Python bot to download music from Deezer with Deezer API and Deezloader
 
 
