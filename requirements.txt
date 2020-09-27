@@ -1,0 +1,3 @@
+aiogram==2.10.1
+aioify==0.3.2
+deezloader==2020.9.18
