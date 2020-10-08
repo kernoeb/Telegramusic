@@ -81,7 +81,7 @@ async def get_album(event: types.Message):
         dl = await download.download_albumdee(tmp, output="tmp", quality="MP3_320", recursive_download=True,
                                               recursive_quality=True, not_interface=False)
         album = requests.get(api_album % event.text.split('/')[-1]).json()
-        tracks = requests.get(api_album % event.text.split('/')[-1] + '/tracks').json()
+        tracks = requests.get(api_album % event.text.split('/')[-1] + '/tracks?limit=100').json()
         tmp_cover = requests.get(album['cover_xl'], stream=True).raw
         tmp_titles = []
         tmp_artists = []
