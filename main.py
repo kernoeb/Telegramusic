@@ -179,6 +179,8 @@ async def inline_echo(inline_query: InlineQuery):
                     ))
         except KeyError:
             pass
+        except AttributeError:
+            pass
         await bot.answer_inline_query(inline_query.id, results=items, cache_time=2)
 
 
