@@ -11,7 +11,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineQuery, \
     InputTextMessageContent, InlineQueryResultArticle
 from aioify import aioify
-from deezloader.deezer_settings import api_track, api_album, api_search_trk
+from deezloader.deezer_settings import api_track, api_album, api_search_trk, api_playlist
 
 locale.setlocale(locale.LC_TIME, '')
 
@@ -99,6 +99,50 @@ async def get_album(event: types.Message):
                                  caption='<b>Album: {}</b>\n{} - {}\n<a href="{}">Lien de l\'album</a>'.format(
                                      album['title'], album['artist']['name'],
                                      tmp_date, album['link']), parse_mode='HTML')
+        await event.delete()
+        for i in dl:
+            await event.answer_audio(open(i, 'rb'), title=tmp_titles[tmp_count],
+                                     performer=', '.join(tmp_artists[tmp_count]))
+            tmp_count += 1
+        await tmp_msg.delete()
+        downloading_users.remove(event.from_user.id)
+
+    else:
+        tmp_err_msg = await event.answer("Un téléchargement est déjà en cours!!")
+        await event.delete()
+        await asyncio.sleep(2)
+        await tmp_err_msg.delete()
+
+
+@dp.message_handler(regexp=r"^https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?playlist\/(\d+)\/?$")
+async def get_playlist(event: types.Message):
+    print(event.from_user)
+    if event.from_user.id not in downloading_users:
+        tmp = event.text
+        if tmp[-1] == '/':
+            tmp = tmp[:-1]
+        tmp_msg = await event.answer("Téléchargement en cours...")
+        downloading_users.append(event.from_user.id)
+        dl = await download.download_playlistdee(tmp, output="tmp", quality="MP3_320", recursive_download=True,
+                                              recursive_quality=True, not_interface=False)
+        album = requests.get(api_playlist % event.text.split('/')[-1]).json()
+        tracks = requests.get(api_playlist % event.text.split('/')[-1] + '/tracks?limit=100').json()
+        tmp_cover = requests.get(album['picture_xl'], stream=True).raw
+        tmp_titles = []
+        tmp_artists = []
+        for track in tracks['data']:
+            tmp_titles.append(track['title'])
+            tmp_track = requests.get(api_track % track['id']).json()
+            tmp_artist_track = []
+            for c in tmp_track['contributors']:
+                tmp_artist_track.append(c['name'])
+            tmp_artists.append(tmp_artist_track)
+        tmp_count = 0
+        tmp_date = album['creation_date'].split(' ')[0].split('-')
+        tmp_date = tmp_date[2] + '/' + tmp_date[1] + '/' + tmp_date[0]
+        await event.answer_photo(tmp_cover,
+                                 caption='<b>Playlist: {}</b>\n{} - {}\n<a href="{}">Lien de la playlist</a>'.format(
+                                     album['title'], album['creator']['name'], tmp_date, album['link']), parse_mode='HTML')
         await event.delete()
         for i in dl:
             await event.answer_audio(open(i, 'rb'), title=tmp_titles[tmp_count],
