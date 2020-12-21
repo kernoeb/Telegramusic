@@ -57,6 +57,10 @@ async def get_track(event: types.Message):
         await event.answer_audio(open(dl, 'rb'), title=tmp_track['title'],
                                  performer=', '.join(tmp_artist_track))
         await tmp_msg.delete()
+        try:
+            shutil.rmtree(os.path.dirname(dl))
+        except FileNotFoundError:
+            pass
         downloading_users.remove(event.from_user.id)
 
     else:
@@ -102,6 +106,10 @@ async def get_album(event: types.Message):
                                      performer=', '.join(tmp_artists[tmp_count]))
             tmp_count += 1
         await tmp_msg.delete()
+        try:
+            shutil.rmtree(os.path.dirname(dl[0]))
+        except FileNotFoundError:
+            pass
         downloading_users.remove(event.from_user.id)
 
     else:
@@ -146,6 +154,10 @@ async def get_playlist(event: types.Message):
                                      performer=', '.join(tmp_artists[tmp_count]))
             tmp_count += 1
         await tmp_msg.delete()
+        try:
+            shutil.rmtree(os.path.dirname(dl[0]))
+        except FileNotFoundError:
+            pass
         downloading_users.remove(event.from_user.id)
 
     else:
