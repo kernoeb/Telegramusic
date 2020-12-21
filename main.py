@@ -3,7 +3,7 @@ import locale
 import logging
 import os
 import re
-from configparser import ConfigParser
+import shutil
 
 import deezloader
 import requests
@@ -15,17 +15,14 @@ from deezloader.deezer_settings import api_track, api_album, api_search_trk, api
 
 locale.setlocale(locale.LC_TIME, '')
 
-config = ConfigParser()
-config.read(os.path.dirname(os.path.realpath(__file__)) + '/config.ini')
-
 logging.basicConfig(level=logging.INFO)
 
 deezloader_async = aioify(obj=deezloader, name='deezloader_async')
 
-download = deezloader_async.Login(config['login']['token'])
+download = deezloader_async.Login(os.environ.get('DEEZER_TOKEN'))
 downloading_users = []
 
-bot = Bot(token=config['telegram']['token'])
+bot = Bot(token=os.environ.get('TELEGRAM_TOKEN'))
 dp = Dispatcher(bot)
 
 
