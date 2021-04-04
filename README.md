@@ -1,6 +1,8 @@
-# TelegramMusicDeezer
-A Python bot to download music from Deezer with Deezer API and Deezloader
+# Telegramusic
 
+A Python bot to download music from :
+- Deezer with Deezer API and Deezloader
+- YouTube
 
 ## Disclaimer
 :warning: For Educational Purposes Only... or for free music :thinking: !!  
