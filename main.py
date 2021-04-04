@@ -118,9 +118,9 @@ async def get_youtube_audio(event: types.Message):
             except FileNotFoundError:
                 pass
         except:
-            await tmp_msg.delete()
             await event.answer("Erreur lors du téléchargement.")
         finally:
+            await tmp_msg.delete()
             try:
                 downloading_users.remove(event.from_user.id)
             except ValueError:
