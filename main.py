@@ -1,4 +1,5 @@
 import asyncio
+import io
 import locale
 import logging
 import os
@@ -13,8 +14,21 @@ from aiogram.types import InlineQuery, \
 from aioify import aioify
 from deezloader.deezer_settings import api_track, api_album, api_search_trk, api_playlist
 from mutagen.mp3 import MP3
+from mutagen.id3 import ID3, APIC, error
+from youtube_dl import YoutubeDL
+from PIL import Image
 
 locale.setlocale(locale.LC_TIME, '')
+
+try:
+    os.mkdir("tmp")
+except FileExistsError:
+    pass
+
+try:
+    os.mkdir("tmp/yt/")
+except FileExistsError:
+    pass
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,6 +39,97 @@ downloading_users = []
 
 bot = Bot(token=os.environ.get('TELEGRAM_TOKEN'))
 dp = Dispatcher(bot)
+
+
+def crop_center(pil_img, crop_width, crop_height):
+    img_width, img_height = pil_img.size
+    return pil_img.crop(((img_width - crop_width) // 2,
+                         (img_height - crop_height) // 2,
+                         (img_width + crop_width) // 2,
+                         (img_height + crop_height) // 2))
+
+
+@dp.message_handler(regexp=r"^(http(s)?:\/\/)?((w){3}.)?youtu(be|.be)?(\.com)?\/.+")
+async def get_youtube_audio(event: types.Message):
+    print(event.from_user)
+    if event.from_user.id not in downloading_users:
+        tmp_msg = await event.answer("Téléchargement en cours...")
+        downloading_users.append(event.from_user.id)
+        try:
+            ydl_opts = {
+                'outtmpl': 'tmp/yt/%(id)s.%(ext)s',
+                'format': 'bestaudio/best',
+                'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}],
+            }
+
+            # Download file
+            ydl = YoutubeDL(ydl_opts)
+            dict_info = ydl.extract_info(event.text, download=True)
+
+            thumb = "https://i.ytimg.com/vi/" + dict_info["id"] + "/maxresdefault.jpg"
+
+            upload_date = dict_info["upload_date"]
+            upload_date = upload_date[6:8] + "/" + upload_date[4:6] + "/" + upload_date[0:4]
+
+            # Send cover
+            await event.answer_photo(thumb,
+                                     caption='<b>Track: {}</b>'
+                                             '\n{} - {}\n'
+                                             '\n<a href="{}">Lien du track</a>'
+                                     .format(
+                                         dict_info['title'],
+                                         dict_info["uploader"], upload_date,
+                                         "https://youtu.be/" + dict_info["id"]),
+                                     parse_mode='HTML'
+                                     )
+
+            # Delete user message
+            await event.delete()
+
+            location = "tmp/yt/" + dict_info["id"] + '.mp3'
+            tmp_song = open(location, 'rb')
+
+            # Get thumb
+            content = requests.get(thumb).content
+            image_bytes = io.BytesIO(content)
+
+            # TAG audio
+            audio = MP3(location, ID3=ID3)
+            try:
+                audio.add_tags()
+            except error:
+                pass
+            audio.tags.add(APIC(mime='image/jpeg', type=3, desc=u'Cover', data=image_bytes.read()))
+            audio.save()
+
+            # Create thumb
+            roi_img = crop_center(Image.open(image_bytes), 80, 80)
+            img_byte_arr = io.BytesIO()
+            roi_img.save(img_byte_arr, format='jpeg')
+
+            # Send audio
+            await event.answer_audio(tmp_song,
+                                     title=dict_info['title'],
+                                     performer=dict_info['uploader'],
+                                     thumb=img_byte_arr.getvalue(),
+                                     disable_notification=True)
+            try:
+                shutil.rmtree(os.path.dirname(location))
+            except FileNotFoundError:
+                pass
+        except:
+            await tmp_msg.delete()
+            await event.answer("Erreur lors du téléchargement.")
+        finally:
+            try:
+                downloading_users.remove(event.from_user.id)
+            except ValueError:
+                pass
+    else:
+        tmp_err_msg = await event.answer("Un téléchargement est déjà en cours!!")
+        await event.delete()
+        await asyncio.sleep(2)
+        await tmp_err_msg.delete()
 
 
 @dp.message_handler(regexp=r"^https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?track\/(\d+)\/?$")
@@ -54,6 +159,8 @@ async def get_track(event: types.Message):
                                          tmp_track['title'], tmp_track['artist']['name'],
                                          tmp_date, tmp_track['album']['link'], tmp_track['link']), parse_mode='HTML'
                                      )
+
+            # Delete user message
             await event.delete()
 
             tmp_song = open(dl, 'rb')
@@ -118,6 +225,8 @@ async def get_album(event: types.Message):
                                          album['title'], album['artist']['name'],
                                          tmp_date, album['link']),
                                      parse_mode='HTML')
+
+            # Delete user message
             await event.delete()
 
             try:
@@ -200,7 +309,10 @@ async def get_playlist(event: types.Message):
                                      caption='<b>Playlist: {}</b>\n{} - {}\n<a href="{}">Lien de la playlist</a>'.format(
                                          album['title'], album['creator']['name'], tmp_date, album['link']),
                                      parse_mode='HTML')
+
+            # Delete user message
             await event.delete()
+
             for i in dl:
                 tmp_song = open(i, 'rb')
                 duration = int(MP3(tmp_song).info.length)
