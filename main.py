@@ -182,7 +182,8 @@ async def get_playlist(event: types.Message):
         tmp_date = tmp_date[2] + '/' + tmp_date[1] + '/' + tmp_date[0]
         await event.answer_photo(tmp_cover,
                                  caption='<b>Playlist: {}</b>\n{} - {}\n<a href="{}">Lien de la playlist</a>'.format(
-                                     album['title'], album['creator']['name'], tmp_date, album['link']), parse_mode='HTML')
+                                     album['title'], album['creator']['name'], tmp_date, album['link']),
+                                 parse_mode='HTML')
         await event.delete()
         for i in dl:
             tmp_song = open(i, 'rb')
