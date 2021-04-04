@@ -1,3 +1,5 @@
-aiogram==2.11.2
-aioify==0.3.2
+aiogram==2.12.1
+aioify==0.4.0
 deezloader==2020.11.26
+requests==2.25.1
+mutagen==1.45.1

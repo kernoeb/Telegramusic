@@ -7,11 +7,12 @@ import shutil
 
 import deezloader
 import requests
-from aiogram import Bot, Dispatcher, executor, types
+from aiogram import Bot, Dispatcher, executor, types, exceptions
 from aiogram.types import InlineQuery, \
-    InputTextMessageContent, InlineQueryResultArticle
+    InputTextMessageContent, InlineQueryResultArticle, InputMediaAudio
 from aioify import aioify
 from deezloader.deezer_settings import api_track, api_album, api_search_trk, api_playlist
+from mutagen.mp3 import MP3
 
 locale.setlocale(locale.LC_TIME, '')
 
@@ -54,8 +55,13 @@ async def get_track(event: types.Message):
                                  )
         await event.delete()
 
-        await event.answer_audio(open(dl, 'rb'), title=tmp_track['title'],
-                                 performer=', '.join(tmp_artist_track))
+        tmp_song = open(dl, 'rb')
+        duration = int(MP3(tmp_song).info.length)
+        await event.answer_audio(tmp_song,
+                                 title=tmp_track['title'],
+                                 performer=', '.join(tmp_artist_track),
+                                 duration=duration,
+                                 disable_notification=True)
         await tmp_msg.delete()
         try:
             shutil.rmtree(os.path.dirname(dl))
@@ -79,8 +85,12 @@ async def get_album(event: types.Message):
             tmp = tmp[:-1]
         tmp_msg = await event.answer("Téléchargement en cours...")
         downloading_users.append(event.from_user.id)
-        dl = await download.download_albumdee(tmp, output="tmp", quality="MP3_320", recursive_download=True,
-                                              recursive_quality=True, not_interface=False)
+        dl = await download.download_albumdee(tmp,
+                                              output="tmp",
+                                              quality="MP3_320",
+                                              recursive_download=True,
+                                              recursive_quality=True,
+                                              not_interface=False)
         album = requests.get(api_album % event.text.split('/')[-1]).json()
         tracks = requests.get(api_album % event.text.split('/')[-1] + '/tracks?limit=100').json()
         tmp_cover = requests.get(album['cover_xl'], stream=True).raw
@@ -93,18 +103,39 @@ async def get_album(event: types.Message):
             for c in tmp_track['contributors']:
                 tmp_artist_track.append(c['name'])
             tmp_artists.append(tmp_artist_track)
-        tmp_count = 0
         tmp_date = album['release_date'].split('-')
         tmp_date = tmp_date[2] + '/' + tmp_date[1] + '/' + tmp_date[0]
         await event.answer_photo(tmp_cover,
                                  caption='<b>Album: {}</b>\n{} - {}\n<a href="{}">Lien de l\'album</a>'.format(
                                      album['title'], album['artist']['name'],
-                                     tmp_date, album['link']), parse_mode='HTML')
+                                     tmp_date, album['link']),
+                                 parse_mode='HTML')
         await event.delete()
-        for i in dl:
-            await event.answer_audio(open(i, 'rb'), title=tmp_titles[tmp_count],
-                                     performer=', '.join(tmp_artists[tmp_count]))
-            tmp_count += 1
+
+        try:
+            tmp_count = 0
+            group_media = []
+
+            for i in dl:
+                tmp_song = open(i, 'rb')
+                duration = int(MP3(tmp_song).info.length)
+                group_media.append(InputMediaAudio(media=tmp_song,
+                                                   title=tmp_titles[tmp_count],
+                                                   performer=', '.join(tmp_artists[tmp_count]),
+                                                   duration=duration))
+                tmp_count += 1
+            await event.answer_media_group(group_media, disable_notification=True)
+        except exceptions.NetworkError:
+            tmp_count = 0
+            for i in dl:
+                tmp_song = open(i, 'rb')
+                duration = int(MP3(tmp_song).info.length)
+                await event.answer_audio(tmp_song,
+                                         title=tmp_titles[tmp_count],
+                                         performer=', '.join(tmp_artists[tmp_count]),
+                                         duration=duration,
+                                         disable_notification=True)
+                tmp_count += 1
         await tmp_msg.delete()
         try:
             shutil.rmtree(os.path.dirname(dl[0]))
@@ -128,8 +159,12 @@ async def get_playlist(event: types.Message):
             tmp = tmp[:-1]
         tmp_msg = await event.answer("Téléchargement en cours...")
         downloading_users.append(event.from_user.id)
-        dl = await download.download_playlistdee(tmp, output="tmp", quality="MP3_320", recursive_download=True,
-                                              recursive_quality=True, not_interface=False)
+        dl = await download.download_playlistdee(tmp,
+                                                 output="tmp",
+                                                 quality="MP3_320",
+                                                 recursive_download=True,
+                                                 recursive_quality=True,
+                                                 not_interface=False)
         album = requests.get(api_playlist % event.text.split('/')[-1]).json()
         tracks = requests.get(api_playlist % event.text.split('/')[-1] + '/tracks?limit=100').json()
         tmp_cover = requests.get(album['picture_xl'], stream=True).raw
@@ -150,8 +185,13 @@ async def get_playlist(event: types.Message):
                                      album['title'], album['creator']['name'], tmp_date, album['link']), parse_mode='HTML')
         await event.delete()
         for i in dl:
-            await event.answer_audio(open(i, 'rb'), title=tmp_titles[tmp_count],
-                                     performer=', '.join(tmp_artists[tmp_count]))
+            tmp_song = open(i, 'rb')
+            duration = int(MP3(tmp_song).info.length)
+            await event.answer_audio(tmp_song,
+                                     title=tmp_titles[tmp_count],
+                                     performer=', '.join(tmp_artists[tmp_count]),
+                                     duration=duration,
+                                     disable_notification=True)
             tmp_count += 1
         await tmp_msg.delete()
         try:
