@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import shutil
+import traceback
 
 import deezloader
 import requests
@@ -66,13 +67,17 @@ async def get_youtube_audio(event: types.Message):
             ydl = YoutubeDL(ydl_opts)
             dict_info = ydl.extract_info(event.text, download=True)
 
-            thumb = "https://i.ytimg.com/vi/" + dict_info["id"] + "/maxresdefault.jpg"
+            thumb = dict_info["thumbnail"]
+
+            # Get thumb
+            content = requests.get(thumb).content
+            image_bytes = io.BytesIO(content)
 
             upload_date = dict_info["upload_date"]
             upload_date = upload_date[6:8] + "/" + upload_date[4:6] + "/" + upload_date[0:4]
 
             # Send cover
-            await event.answer_photo(thumb,
+            await event.answer_photo(image_bytes.read(),
                                      caption='<b>Track: {}</b>'
                                              '\n{} - {}\n'
                                              '\n<a href="{}">Lien du track</a>'
@@ -88,10 +93,6 @@ async def get_youtube_audio(event: types.Message):
 
             location = "tmp/yt/" + dict_info["id"] + '.mp3'
             tmp_song = open(location, 'rb')
-
-            # Get thumb
-            content = requests.get(thumb).content
-            image_bytes = io.BytesIO(content)
 
             # TAG audio
             audio = MP3(location, ID3=ID3)
@@ -118,6 +119,7 @@ async def get_youtube_audio(event: types.Message):
             except FileNotFoundError:
                 pass
         except:
+            traceback.print_exc()
             await event.answer("Erreur lors du téléchargement.")
         finally:
             await tmp_msg.delete()
