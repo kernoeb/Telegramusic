@@ -4,4 +4,4 @@ deezloader==2020.11.26
 requests==2.25.1
 mutagen==1.45.1
 Pillow==8.2.0
-youtube_dl==2021.4.1
+youtube_dl==2021.4.7

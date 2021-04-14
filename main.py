@@ -9,15 +9,15 @@ import traceback
 
 import deezloader
 import requests
+from PIL import Image
 from aiogram import Bot, Dispatcher, executor, types, exceptions
 from aiogram.types import InlineQuery, \
     InputTextMessageContent, InlineQueryResultArticle, InputMediaAudio
 from aioify import aioify
 from deezloader.deezer_settings import api_track, api_album, api_search_trk, api_playlist
-from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, APIC, error
+from mutagen.mp3 import MP3
 from youtube_dl import YoutubeDL
-from PIL import Image
 
 locale.setlocale(locale.LC_TIME, '')
 
