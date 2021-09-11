@@ -17,6 +17,7 @@ from aioify import aioify
 from mutagen.id3 import ID3, APIC, error
 from mutagen.mp3 import MP3
 from youtube_dl import YoutubeDL
+from urllib.parse import quote
 
 locale.setlocale(locale.LC_TIME, '')
 
@@ -25,7 +26,7 @@ API_URL = "https://api.deezer.com"
 
 API_TRACK = API_URL + "/track/%s"
 API_ALBUM = API_URL + "/album/%s"
-API_SEARCH_TRK = API_URL + "/search/track/%s"
+API_SEARCH_TRK = API_URL + "/search/track/?q=%s"
 API_PLAYLIST = API_URL + "/playlist/%s"
 
 DEFAULT_QUALITY = "MP3_320"
@@ -156,7 +157,7 @@ async def get_track(event: types.Message):
             dl = await download.download_trackdee(tmp, output_dir="tmp", quality_download=DEFAULT_QUALITY,
                                                   recursive_download=True,
                                                   recursive_quality=True, not_interface=False)
-            tmp_track = requests.get(API_TRACK % event.text.split('/')[-1]).json()
+            tmp_track = requests.get(API_TRACK % quote(event.text.split('/')[-1])).json()
             tmp_cover = requests.get(tmp_track['album']['cover_xl'], stream=True).raw
             tmp_artist_track = []
             for c in tmp_track['contributors']:
@@ -218,14 +219,14 @@ async def get_album(event: types.Message):
                                                   recursive_download=True,
                                                   recursive_quality=True,
                                                   not_interface=False)
-            album = requests.get(API_ALBUM % event.text.split('/')[-1]).json()
-            tracks = requests.get(API_ALBUM % event.text.split('/')[-1] + '/tracks?limit=100').json()
+            album = requests.get(API_ALBUM % quote(event.text.split('/')[-1])).json()
+            tracks = requests.get(API_ALBUM % quote(event.text.split('/')[-1]) + '/tracks?limit=100').json()
             tmp_cover = requests.get(album['cover_xl'], stream=True).raw
             tmp_titles = []
             tmp_artists = []
             for track in tracks['data']:
                 tmp_titles.append(track['title'])
-                tmp_track = requests.get(API_TRACK % track['id']).json()
+                tmp_track = requests.get(API_TRACK % quote(track['id'])).json()
                 tmp_artist_track = []
                 for c in tmp_track['contributors']:
                     tmp_artist_track.append(c['name'])
@@ -302,14 +303,14 @@ async def get_playlist(event: types.Message):
                                                      recursive_download=True,
                                                      recursive_quality=True,
                                                      not_interface=False)
-            album = requests.get(API_PLAYLIST % event.text.split('/')[-1]).json()
-            tracks = requests.get(API_PLAYLIST % event.text.split('/')[-1] + '/tracks?limit=100').json()
+            album = requests.get(API_PLAYLIST % quote(event.text.split('/')[-1])).json()
+            tracks = requests.get(API_PLAYLIST % quote(event.text.split('/')[-1]) + '/tracks?limit=100').json()
             tmp_cover = requests.get(album['picture_xl'], stream=True).raw
             tmp_titles = []
             tmp_artists = []
             for track in tracks['data']:
                 tmp_titles.append(track['title'])
-                tmp_track = requests.get(API_TRACK % track['id']).json()
+                tmp_track = requests.get(API_TRACK % quote(track['id'])).json()
                 tmp_artist_track = []
                 for c in tmp_track['contributors']:
                     tmp_artist_track.append(c['name'])
@@ -371,20 +372,21 @@ async def test(event: types.Message):
 @dp.inline_handler()
 async def inline_echo(inline_query: InlineQuery):
     if inline_query.query:
+        print("oui")
         album = False
         if inline_query.query.startswith('artist '):
             album = True
             tmp_text = 'artist:"{}"'.format(inline_query.query.split('artist ')[1])
-            text = API_SEARCH_TRK % tmp_text
+            text = API_SEARCH_TRK % quote(tmp_text)
         elif inline_query.query.startswith('track '):
             tmp_text = 'track:"{}"'.format(inline_query.query.split('track ')[1])
-            text = API_SEARCH_TRK % tmp_text
+            text = API_SEARCH_TRK % quote(tmp_text)
         elif inline_query.query.startswith('album '):
             album = True
             tmp_text = 'album:"{}"'.format(inline_query.query.split('album ')[1])
-            text = API_SEARCH_TRK % tmp_text
+            text = API_SEARCH_TRK % quote(tmp_text)
         else:
-            text = API_SEARCH_TRK % inline_query.query
+            text = API_SEARCH_TRK % quote(inline_query.query)
 
         items = []
         try:
@@ -394,13 +396,13 @@ async def inline_echo(inline_query: InlineQuery):
                 tmp_url = i['album']['tracklist']
                 tmp_id = re.search('/album/(.*)/tracks', tmp_url).group(1)
                 if not (album and tmp_id in all_ids):
-                    tmp_album = requests.get(API_ALBUM % tmp_id).json()
+                    tmp_album = requests.get(API_ALBUM % quote(tmp_id)).json()
                     all_ids.append(tmp_id)
                     tmp_date = tmp_album['release_date'].split('-')
                     tmp_date = tmp_date[2] + '/' + tmp_date[1] + '/' + tmp_date[0]
                     if album:
                         title = i['album']['title']
-                        tmp_input = InputTextMessageContent(DEEZER_URL + "/album/%s" % tmp_id)
+                        tmp_input = InputTextMessageContent(DEEZER_URL + "/album/%s" % quote(tmp_id))
                         try:
                             nb = str(len(tmp_album['tracks']['data'])) + ' audio(s)'
                         except KeyError:
