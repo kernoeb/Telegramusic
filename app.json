@@ -2,4 +2,15 @@
   "name": "Telegramusic",
   "description": "Telegram Bot to download music from Deezer and YouTube",
   "repository": "https://github.com/kernoeb/Telegramusic",
+  "env": {
+    "DEEZER_TOKEN": {
+      "description": "Deezer token",
+      "value": "abcdefghijklmnoxxxxxxxxxxxx"
+    },
+    "TELEGRAM_TOKEN": {
+      "description": "Telegram token",
+      "value": "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    }
+  },
+ "image": "heroku/python"
 }
