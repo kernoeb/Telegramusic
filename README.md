@@ -4,6 +4,8 @@ A Python bot to download music from :
 - Deezer with Deezer API and Deezloader
 - YouTube
 
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/kernoeb/Telegramusic)
+
 ## Disclaimer
 :warning: For Educational Purposes Only... or for free music :thinking: !!  
 Please don't use this for illegal stuff.  
