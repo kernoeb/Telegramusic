@@ -14,7 +14,7 @@ It's **against Deezer's terms of service**.
 
 ## Usage
 
-- Get an `arl` cookie on Deezer for `DEEZER_TOKEN`
+- Get an `arl` cookie on Deezer for `DEEZER_TOKEN` (see [this repo](https://github.com/nathom/streamrip/wiki/Finding-Your-Deezer-ARL-Cookie))
 - Create a bot on Telegram and grab a token with [Bot Father](https://t.me/botfather) (`TELEGRAM_TOKEN`)
 
 ## Configuration
