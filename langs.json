@@ -1,0 +1,26 @@
+{
+  "downloading": {
+    "fr": "Téléchargement en cours...",
+    "en": "Downloading..."
+  },
+  "track_link": {
+    "fr": "Lien du track",
+    "en": "Track link"
+  },
+  "album_link": {
+    "fr": "Lien de l'album",
+    "en": "Album link"
+  },
+  "playlist_link": {
+    "fr": "Lien de la playlist",
+    "en": "Playlist link"
+  },
+  "download_error": {
+    "fr": "Échec du téléchargement.",
+    "en": "Download failed."
+  },
+  "running_download": {
+    "fr": "Un téléchargement est déjà en cours !",
+    "en": "A download is already in progress!"
+  }
+}

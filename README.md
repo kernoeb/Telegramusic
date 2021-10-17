@@ -12,6 +12,10 @@ Please don't use this for illegal stuff.
 It's **against Deezer's terms of service**.
 
 
+## Translations
+
+Your native language is not in the `langs.json` file ? Just make a pull request or pm me !
+
 ## Usage
 
 - Get an `arl` cookie on Deezer for `DEEZER_TOKEN` (see [this repo](https://github.com/nathom/streamrip/wiki/Finding-Your-Deezer-ARL-Cookie))
@@ -25,6 +29,7 @@ token.env
 ```
 DEEZER_TOKEN=abcdefghijklmnoxxxxxxxxxxxx
 TELEGRAM_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ
+BOT_LANG=fr
 ```
 
 `docker run -it -d --restart=always --env-file token.env --name telegram_music_bot telegram_music_bot`
