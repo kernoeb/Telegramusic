@@ -262,7 +262,7 @@ async def get_album(event: types.Message):
                 tmp_count = 0
                 group_media = []
 
-                if len(dl.tracks) == 1:
+                if len(dl.tracks) < 2 or len(dl.tracks) > 10:
                     raise exceptions.NetworkError('One track !')
 
                 for i in dl.tracks:
