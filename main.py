@@ -142,9 +142,9 @@ async def get_youtube_audio(event: types.Message):
                 shutil.rmtree(os.path.dirname(location))
             except FileNotFoundError:
                 pass
-        except:
+        except Exception as e:
             traceback.print_exc()
-            await event.answer(__('download_error'))
+            await event.answer(__('download_error') + ' ' + str(e))
         finally:
             await tmp_msg.delete()
             try:
@@ -202,9 +202,9 @@ async def get_track(event: types.Message):
                 shutil.rmtree(os.path.dirname(dl.song_path))
             except FileNotFoundError:
                 pass
-        except KeyError:
+        except Exception as e:
             await tmp_msg.delete()
-            await event.answer(__('download_error'))
+            await event.answer(__('download_error') + ' ' + str(e))
         finally:
             try:
                 downloading_users.remove(event.from_user.id)
@@ -290,9 +290,9 @@ async def get_album(event: types.Message):
                 shutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
             except FileNotFoundError:
                 pass
-        except KeyError:
+        except Exception as e:
             await tmp_msg.delete()
-            await event.answer(__('download_error'))
+            await event.answer(__('download_error') + ' ' + str(e))
         finally:
             try:
                 downloading_users.remove(event.from_user.id)
@@ -365,9 +365,9 @@ async def get_playlist(event: types.Message):
                     shutil.rmtree(os.path.dirname(i.song_path))
                 except FileNotFoundError:
                     pass
-        except KeyError:
+        except Exception as e:
             await tmp_msg.delete()
-            await event.answer(__('download_error'))
+            await event.answer(__('download_error') + ' ' + str(e))
         finally:
             try:
                 downloading_users.remove(event.from_user.id)
@@ -380,8 +380,8 @@ async def get_playlist(event: types.Message):
         await tmp_err_msg.delete()
 
 
-@dp.message_handler(commands=['help'])
-async def test(event: types.Message):
+@dp.message_handler(commands=['help', 'start'])
+async def help_start(event: types.Message):
     bot_info = await bot.get_me()
     bot_name = bot_info.first_name.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
     bot_username = bot_info.username.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
@@ -394,6 +394,7 @@ async def test(event: types.Message):
 
 @dp.inline_handler()
 async def inline_echo(inline_query: InlineQuery):
+    items = []
     if inline_query.query:
         album = False
         if inline_query.query.startswith('artist '):
@@ -410,7 +411,6 @@ async def inline_echo(inline_query: InlineQuery):
         else:
             text = API_SEARCH_TRK % quote(str(inline_query.query))
 
-        items = []
         try:
             r = requests.get(text).json()
             all_ids = []
@@ -443,11 +443,13 @@ async def inline_echo(inline_query: InlineQuery):
                         thumb_url=i['album']['cover_small'],
                         input_message_content=tmp_input,
                     ))
-        except KeyError:
+        except KeyError as e:
+            print(e)
             pass
-        except AttributeError:
+        except AttributeError as e:
+            print(e)
             pass
-        await bot.answer_inline_query(inline_query.id, results=items, cache_time=2)
+    await bot.answer_inline_query(inline_query.id, results=items, cache_time=300)
 
 
 if __name__ == '__main__':
