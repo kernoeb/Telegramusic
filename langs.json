@@ -1,26 +1,32 @@
 {
   "downloading": {
     "fr": "Téléchargement en cours...",
-    "en": "Downloading..."
+    "en": "Downloading...",
+    "es": "Descargando..."
   },
   "track_link": {
     "fr": "Lien du track",
-    "en": "Track link"
+    "en": "Track link",
+    "es": "Enlace de la canción"
   },
   "album_link": {
     "fr": "Lien de l'album",
-    "en": "Album link"
+    "en": "Album link",
+    "es": "Link del álbum"
   },
   "playlist_link": {
     "fr": "Lien de la playlist",
-    "en": "Playlist link"
+    "en": "Playlist link",
+    "es": "Link de la playlist"
   },
   "download_error": {
     "fr": "Échec du téléchargement.",
-    "en": "Download failed."
+    "en": "Download failed.",
+    "es": "Descarga fallida"
   },
   "running_download": {
     "fr": "Un téléchargement est déjà en cours !",
-    "en": "A download is already in progress!"
+    "en": "A download is already in progress!",
+    "es": "Una descarga ya está en proceso"
   }
 }
