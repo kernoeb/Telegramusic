@@ -19,7 +19,8 @@ Your native language is not in the `langs.json` file ? Just make a pull request 
 ## Usage
 
 - Get an `arl` cookie on Deezer for `DEEZER_TOKEN` (see [this repo](https://github.com/nathom/streamrip/wiki/Finding-Your-Deezer-ARL-Cookie))
-- Create a bot on Telegram and grab a token with [Bot Father](https://t.me/botfather) (`TELEGRAM_TOKEN`)
+- Create a bot on Telegram and grab a token with [Bot Father](https://t.me/botfather) (`TELEGRAM_TOKEN`) 
+- Activate `Inline Mode` on BotFather for the bot you just created
 
 ## Configuration
 
