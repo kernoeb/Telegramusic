@@ -9,7 +9,7 @@ import shutil
 import traceback
 from urllib.parse import quote
 
-import deezloader
+import deezloader.deezloader
 import requests
 from PIL import Image
 from aiogram import Bot, Dispatcher, executor, types, exceptions
@@ -44,9 +44,9 @@ except FileExistsError:
 
 logging.basicConfig(level=logging.INFO)
 
-deezloader_async = aioify(obj=deezloader, name='deezloader_async')
+deezloader_async = aioify(obj=deezloader.deezloader, name='deezloader_async')
 
-download = deezloader_async.Login(os.environ.get('DEEZER_TOKEN'))
+download = deezloader_async.DeeLogin(os.environ.get('DEEZER_TOKEN'))
 downloading_users = []
 
 bot = Bot(token=os.environ.get('TELEGRAM_TOKEN'))
