@@ -7,7 +7,7 @@ A Python bot to download music from :
 [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/kernoeb/Telegramusic)
 
 ## Disclaimer
-:warning: For Educational Purposes Only... or for free music :thinking: !!  
+:warning: For educational purposes only (or for free music)    
 Please don't use this for illegal stuff.  
 It's **against Deezer's terms of service**.
 
@@ -22,6 +22,25 @@ Your native language is not in the `langs.json` file ? Just make a pull request 
 - Create a bot on Telegram and grab a token with [Bot Father](https://t.me/botfather) (`TELEGRAM_TOKEN`) 
 - Activate `Inline Mode` on BotFather for the bot you just created
 
+
+----
+
+Search for music in `inline mode` :
+
+```
+@xxxxxxx_bot (album|track|artist) <search>
+```
+
+![image](https://user-images.githubusercontent.com/24623168/141982877-ca7589d4-fe47-4b5a-b751-6d945c21f944.png)
+
+
+![image](https://user-images.githubusercontent.com/24623168/141983477-b7692d78-134a-4176-98ba-d6388ac4b80b.png)
+
+
+or send a Deezer / YouTube link
+
+----
+
 ## Configuration
 
 ### Docker
@@ -35,8 +54,19 @@ BOT_LANG=fr
 
 `docker run -it -d --restart=always --env-file token.env --name telegram_music_bot telegram_music_bot`
 
-(Feel free to use a docker-compose)
+-----
 
+**docker-compose.yml**  
+(example)
+
+```
+services:
+  worker:
+    build: .
+    restart: always
+    env_file:
+      - token.env     
+ ```
 
 ### Local usage
 
