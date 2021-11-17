@@ -2,6 +2,7 @@
 tmp/
 .idea/
 .vscode/
+token.env
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

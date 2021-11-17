@@ -1,0 +1,8 @@
+version: "3"
+
+services:
+  worker:
+    build: .
+    restart: always
+    env_file:
+      - token.env

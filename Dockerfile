@@ -13,4 +13,8 @@ RUN cd /tmp && wget https://github.com/ytdl-org/youtube-dl/archive/8e069597c6588
 
 COPY . .
 
+# Temp fix to avoid flac download
+RUN mv ./fixes/deezer_settings.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/deezer_settings.py
+RUN rm -rf ./fixes
+
 CMD [ "python", "./main.py" ]
