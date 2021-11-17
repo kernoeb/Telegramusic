@@ -168,9 +168,16 @@ async def get_track(event: types.Message):
         tmp_msg = await event.answer(__('downloading'))
         downloading_users.append(event.from_user.id)
         try:
-            dl = await download.download_trackdee(tmp, output_dir="tmp", quality_download=DEFAULT_QUALITY,
-                                                  recursive_download=True,
-                                                  recursive_quality=True, not_interface=False)
+            try:
+                dl = await download.download_trackdee(tmp, output_dir="tmp", quality_download=DEFAULT_QUALITY,
+                                                      recursive_download=True,
+                                                      recursive_quality=True, not_interface=False)
+            except:
+                # Let's try again...
+                await asyncio.sleep(1)
+                dl = await download.download_trackdee(tmp, output_dir="tmp", quality_download=DEFAULT_QUALITY,
+                                                      recursive_download=True,
+                                                      recursive_quality=True, not_interface=False)
             tmp_track = requests.get(API_TRACK % quote(str(event.text.split('/')[-1]))).json()
             tmp_cover = requests.get(tmp_track['album']['cover_xl'], stream=True).raw
             tmp_artist_track = []
@@ -227,12 +234,22 @@ async def get_album(event: types.Message):
         tmp_msg = await event.answer(__('downloading'))
         downloading_users.append(event.from_user.id)
         try:
-            dl = await download.download_albumdee(tmp,
-                                                  output_dir="tmp",
-                                                  quality_download=DEFAULT_QUALITY,
-                                                  recursive_download=True,
-                                                  recursive_quality=True,
-                                                  not_interface=False)
+            try:
+                dl = await download.download_albumdee(tmp,
+                                                      output_dir="tmp",
+                                                      quality_download=DEFAULT_QUALITY,
+                                                      recursive_download=True,
+                                                      recursive_quality=True,
+                                                      not_interface=False)
+            except:
+                # Let's try again...
+                await asyncio.sleep(1)
+                dl = await download.download_albumdee(tmp,
+                                                      output_dir="tmp",
+                                                      quality_download=DEFAULT_QUALITY,
+                                                      recursive_download=True,
+                                                      recursive_quality=True,
+                                                      not_interface=False)
             album = requests.get(API_ALBUM % quote(str(event.text.split('/')[-1]))).json()
             tracks = requests.get(API_ALBUM % quote(str(event.text.split('/')[-1])) + '/tracks?limit=100').json()
             tmp_cover = requests.get(album['cover_xl'], stream=True).raw
@@ -316,12 +333,22 @@ async def get_playlist(event: types.Message):
         tmp_msg = await event.answer(__('downloading'))
         downloading_users.append(event.from_user.id)
         try:
-            dl = await download.download_playlistdee(tmp,
-                                                     output_dir="tmp",
-                                                     quality_download=DEFAULT_QUALITY,
-                                                     recursive_download=True,
-                                                     recursive_quality=True,
-                                                     not_interface=False)
+            try:
+                dl = await download.download_playlistdee(tmp,
+                                                         output_dir="tmp",
+                                                         quality_download=DEFAULT_QUALITY,
+                                                         recursive_download=True,
+                                                         recursive_quality=True,
+                                                         not_interface=False)
+            except:
+                # Let's try again...
+                await asyncio.sleep(1)
+                dl = await download.download_playlistdee(tmp,
+                                                         output_dir="tmp",
+                                                         quality_download=DEFAULT_QUALITY,
+                                                         recursive_download=True,
+                                                         recursive_quality=True,
+                                                         not_interface=False)
             album = requests.get(API_PLAYLIST % quote(str(event.text.split('/')[-1]))).json()
             tracks = requests.get(API_PLAYLIST % quote(str(event.text.split('/')[-1])) + '/tracks?limit=100').json()
             tmp_cover = requests.get(album['picture_xl'], stream=True).raw
