@@ -3,36 +3,48 @@
     "fr": "Téléchargement en cours...",
     "en": "Downloading...",
     "es": "Descargando...",
-    "pt": "Está fazendo o download..."
+    "pt": "Está fazendo o download...",
+    "in": "Anda sedang download...",
+    "dt": "Es wird heruntergeladen..."
   },
   "track_link": {
     "fr": "Lien du track",
     "en": "Track link",
     "es": "Enlace de la canción",
-    "pt": "Link da música"
+    "pt": "Link da música",
+    "in": "Tautan musik",
+    "dt": "Musik-Link"
   },
   "album_link": {
     "fr": "Lien de l'album",
     "en": "Album link",
     "es": "Link del álbum",
-    "pt": "Link do Álbum"
+    "pt": "Link do Álbum",
+    "in": "Tautan Album",
+    "dt": "Album-Link"
   },
   "playlist_link": {
     "fr": "Lien de la playlist",
     "en": "Playlist link",
     "es": "Link de la playlist",
-    "pt": "Link da playlist"
+    "pt": "Link da playlist",
+    "in": "Tautan playlist",
+    "dt": "Playlist-Link"
   },
   "download_error": {
     "fr": "Échec du téléchargement.",
     "en": "Download failed.",
     "es": "Descarga fallida",
-    "pt": "Aconteceu um erro durante o download"
+    "pt": "Aconteceu um erro durante o download",
+    "in": "Terjadi kesalahan selama download",
+    "dt": "Beim Herunterladen ist ein Fehler aufgetreten"
   },
   "running_download": {
     "fr": "Un téléchargement est déjà en cours !",
     "en": "A download is already in progress!",
     "es": "Una descarga ya está en proceso",
-    "pt": "Um download já está em andamento!"
+    "pt": "Um download já está em andamento!",
+    "in": "Pengunduhan sedang berlangsung!",
+    "dt": "Ein Download ist bereits in Bearbeitung!"
   }
 }
