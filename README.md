@@ -12,6 +12,14 @@ Please don't use this for illegal stuff.
 It's **against Deezer's terms of service**.
 
 
+## Information
+
+You should probably use Docker way to install the bot, or follow the steps listed in the Dockerfile
+You will have a upgraded version of youtube_dl which is really faster
+And avoid the "FLAC issue" from the deezer download library
+Theses commands can be run manually or in a script
+
+
 ## Translations
 
 Your native language is not in the `langs.json` file ? Just make a pull request or pm me !
