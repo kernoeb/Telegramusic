@@ -18,7 +18,7 @@ from aiogram.types import InlineQuery, \
 from aioify import aioify
 from mutagen.id3 import ID3, APIC, error
 from mutagen.mp3 import MP3
-from youtube_dl import YoutubeDL
+from yt_dlp import YoutubeDL
 
 locale.setlocale(locale.LC_TIME, '')
 
