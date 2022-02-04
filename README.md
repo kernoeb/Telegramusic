@@ -14,9 +14,8 @@ It's **against Deezer's terms of service**.
 
 ## Information
 
-You should probably use Docker way to install the bot, or follow the steps listed in the Dockerfile  
-You will have a upgraded version of youtube_dl which is really faster, and avoid the "FLAC issue" from the deezer download library.  
-These commands can be executed manually or in a script.
+You should probably use Docker way to install the bot, or follow the steps listed in the Dockerfile.  
+As indicated in the Dockerfile there's a temporary patch to avoid the "FLAC issue" from the deezer download library.
 
 
 ## Translations
