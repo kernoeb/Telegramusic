@@ -4,4 +4,4 @@ deezloader==2021.11.9
 requests==2.27.1
 mutagen==1.45.1
 Pillow==9.0.1
-yt-dlp==2022.2.3
+yt-dlp==2022.2.4

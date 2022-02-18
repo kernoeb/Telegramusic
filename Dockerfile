@@ -8,7 +8,7 @@ RUN ffmpeg -version
 
 WORKDIR /usr/src/app
 
-ADD fixes/deezer_settings.py fixes/deezer_settings.py
+ADD patches/deezer_settings.py patches/deezer_settings.py
 ADD langs.json .
 ADD main.py .
 ADD requirements.txt .
@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Temp fix to avoid flac download
 RUN echo "Temp FLAC fix" && \
-    mv ./fixes/deezer_settings.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/deezer_settings.py \
-    && rm -rf ./fixes
+    mv ./patches/deezer_settings.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/deezer_settings.py \
+    && rm -rf ./patches
 
 CMD [ "python", "./main.py" ]
