@@ -4,16 +4,14 @@ RUN apk add --no-cache ffmpeg alpine-sdk python3-dev py3-setuptools tiff-dev jpe
     libwebp-dev tcl-dev tk-dev harfbuzz-dev fribidi-dev libimagequant-dev \
     libxcb-dev libpng-dev
 
-RUN ffmpeg -version
-
 WORKDIR /usr/src/app
 
-ADD patches/deezer_settings.py patches/deezer_settings.py
-ADD langs.json .
-ADD main.py .
-ADD requirements.txt .
-
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+
+COPY patches/deezer_settings.py ./patches/deezer_settings.py
+COPY langs.json ./
+COPY main.py ./
 
 # Temp fix to avoid flac download
 RUN echo "Temp FLAC fix" && \
