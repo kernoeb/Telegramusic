@@ -97,8 +97,13 @@ async def get_youtube_audio(event: types.Message):
             content = requests.get(thumb).content
             image_bytes = io.BytesIO(content)
 
-            upload_date = dict_info["upload_date"]
-            upload_date = upload_date[6:8] + "/" + upload_date[4:6] + "/" + upload_date[0:4]
+            upload_date = "Unknown date"
+            try:
+                if dict_info is not None and dict_info["upload_date"] is not None:
+                    upload_date = dict_info["upload_date"]
+                    upload_date = upload_date[6:8] + "/" + upload_date[4:6] + "/" + upload_date[0:4]
+            except:
+                pass
 
             # Send cover
             await event.answer_photo(image_bytes.read(),
@@ -138,6 +143,7 @@ async def get_youtube_audio(event: types.Message):
                                      performer=dict_info['uploader'],
                                      thumb=img_byte_arr.getvalue(),
                                      disable_notification=True)
+            tmp_song.close()
             try:
                 shutil.rmtree(os.path.dirname(location))
             except FileNotFoundError:
@@ -199,12 +205,14 @@ async def get_track(event: types.Message):
 
             tmp_song = open(dl.song_path, 'rb')
             duration = int(MP3(tmp_song).info.length)
+            tmp_song.seek(0)
             await event.answer_audio(tmp_song,
                                      title=tmp_track['title'],
                                      performer=', '.join(tmp_artist_track),
                                      duration=duration,
                                      disable_notification=True)
             await tmp_msg.delete()
+            tmp_song.close()
             try:
                 shutil.rmtree(os.path.dirname(dl.song_path))
             except FileNotFoundError:
@@ -282,31 +290,49 @@ async def get_album(event: types.Message):
                 if len(dl.tracks) < 2 or len(dl.tracks) > 10:
                     raise exceptions.NetworkError('One track !')
 
+                all_tracks = []
                 for i in dl.tracks:
                     tmp_song = open(i.song_path, 'rb')
-                    duration = int(MP3(tmp_song).info.length)
-                    group_media.append(InputMediaAudio(media=tmp_song,
+                    all_tracks.append(tmp_song)
+
+                for track in all_tracks:
+                    duration = int(MP3(track).info.length)
+                    track.seek(0)
+                    group_media.append(InputMediaAudio(media=track,
                                                        title=tmp_titles[tmp_count],
                                                        performer=', '.join(tmp_artists[tmp_count]),
                                                        duration=duration))
                     tmp_count += 1
                 await event.answer_media_group(group_media, disable_notification=True)
+
+                for track in all_tracks:
+                    track.close()
             except exceptions.NetworkError:
                 tmp_count = 0
+
+                all_tracks = []
                 for i in dl.tracks:
                     tmp_song = open(i.song_path, 'rb')
-                    duration = int(MP3(tmp_song).info.length)
-                    await event.answer_audio(tmp_song,
+                    all_tracks.append(tmp_song)
+
+                for track in all_tracks:
+                    duration = int(MP3(track).info.length)
+                    track.seek(0)
+                    await event.answer_audio(track,
                                              title=tmp_titles[tmp_count],
                                              performer=', '.join(tmp_artists[tmp_count]),
                                              duration=duration,
                                              disable_notification=True)
                     tmp_count += 1
+
             await tmp_msg.delete()
             try:
                 shutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
             except FileNotFoundError:
                 pass
+
+            for track in all_tracks:
+                track.close()
         except Exception as e:
             await tmp_msg.delete()
             await event.answer(__('download_error') + ' ' + str(e))
@@ -376,10 +402,15 @@ async def get_playlist(event: types.Message):
             # Delete user message
             await event.delete()
 
+            all_tracks = []
             for i in dl.tracks:
                 tmp_song = open(i.song_path, 'rb')
-                duration = int(MP3(tmp_song).info.length)
-                await event.answer_audio(tmp_song,
+                all_tracks.append(tmp_song)
+
+            for track in all_tracks:
+                duration = int(MP3(track).info.length)
+                track.seek(0)
+                await event.answer_audio(track,
                                          title=tmp_titles[tmp_count],
                                          performer=', '.join(tmp_artists[tmp_count]),
                                          duration=duration,
@@ -392,6 +423,9 @@ async def get_playlist(event: types.Message):
                     shutil.rmtree(os.path.dirname(i.song_path))
                 except FileNotFoundError:
                     pass
+
+            for i in all_tracks:
+                i.close()
         except Exception as e:
             await tmp_msg.delete()
             await event.answer(__('download_error') + ' ' + str(e))
