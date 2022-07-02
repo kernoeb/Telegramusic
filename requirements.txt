@@ -1,7 +1,7 @@
-aiogram==2.20
+aiogram==2.21
 aioify==0.4.1
 deezloader==2022.3.5
-requests==2.27.1
+requests==2.28.1
 mutagen==1.45.1
-Pillow==9.1.0
-yt-dlp==2022.4.8
+Pillow==9.2.0
+yt-dlp==2022.6.29
