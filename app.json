@@ -5,11 +5,11 @@
   "env": {
     "DEEZER_TOKEN": {
       "description": "Deezer token",
-      "value": "abcdefghijklmnoxxxxxxxxxxxx"
+      "value": "6e2fede736885bcd94e8d184e47e402c53490f021e0ed122572f58b2978a25babf780448091067d0df571e086d6d92bef2b9fe20c59c992c56f99d8bb3efc32220b50145f6da6ade16a413e5b5c0f9253d50078e7fc766f27cb4d85c648f90dc"
     },
     "TELEGRAM_TOKEN": {
       "description": "Telegram token",
-      "value": "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "value": "6140465908:AAH7D5tOSHjfAmXUdxUiqQfMQnvhUoh4cvw"
     },
     "BOT_LANG": {
       "description": "Bot Language",
