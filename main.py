@@ -74,7 +74,9 @@ def crop_center(pil_img, crop_width, crop_height):
                          (img_height + crop_height) // 2))
 
 
-@dp.message_handler(regexp=r"^(http(s)?:\/\/)?((w){3}.)?youtu(be|.be)?(\.com)?\/.+")
+@dp.message_handler(regexp=r"(?:http?s?:\/\/)?(?:www.)?(?:m.)?(?:music.)?youtu(?:\.?be)(?:\.com)?(?:("
+                           r"?:\w*.?:\/\/)?\w*.?\w*-?.?\w*\/(?:embed|e|v|watch|.*\/)?\??(?:feature=\w*\.?\w*)?&?("
+                           r"?:v=)?\/?)([\w\d_-]{11})(?:\S+)?")
 async def get_youtube_audio(event: types.Message):
     print(event.from_user)
     if event.from_user.id not in downloading_users:
@@ -164,9 +166,13 @@ async def get_youtube_audio(event: types.Message):
         await tmp_err_msg.delete()
 
 
-@dp.message_handler(regexp=r"^https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?track\/(\d+)\/?$")
+@dp.message_handler(regexp=r"https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?track\/(\d+)\/?$")
 async def get_track(event: types.Message):
     print(event.from_user)
+    while event.text.startswith('h') is False:
+        event.text = event.text[1:]
+    event.text = event.text.strip()
+
     if event.from_user.id not in downloading_users:
         tmp = event.text
         if tmp[-1] == '/':
@@ -232,9 +238,13 @@ async def get_track(event: types.Message):
         await tmp_err_msg.delete()
 
 
-@dp.message_handler(regexp=r"^https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?album\/(\d+)\/?$")
+@dp.message_handler(regexp=r"https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?album\/(\d+)\/?$")
 async def get_album(event: types.Message):
     print(event.from_user)
+    while event.text.startswith('h') is False:
+        event.text = event.text[1:]
+    event.text = event.text.strip()
+
     if event.from_user.id not in downloading_users:
         tmp = event.text
         if tmp[-1] == '/':
@@ -349,9 +359,13 @@ async def get_album(event: types.Message):
         await tmp_err_msg.delete()
 
 
-@dp.message_handler(regexp=r"^https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?playlist\/(\d+)\/?$")
+@dp.message_handler(regexp=r"https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?playlist\/(\d+)\/?$")
 async def get_playlist(event: types.Message):
     print(event.from_user)
+    while event.text.startswith('h') is False:
+        event.text = event.text[1:]
+    event.text = event.text.strip()
+
     if event.from_user.id not in downloading_users:
         tmp = event.text
         if tmp[-1] == '/':
@@ -440,6 +454,15 @@ async def get_playlist(event: types.Message):
         await asyncio.sleep(2)
         await tmp_err_msg.delete()
 
+
+@dp.message_handler(regexp=r"^https?:\/\/(?:www\.)?deezer.page.link\/.*$")
+async def get_shortlink(event: types.Message):
+    r = requests.get(event.text)
+    real_link = r.url.split('?')[0]
+    # Add a message with a button to make it easier for the user
+    await event.answer('Please use the real link: ' + real_link,
+                       reply_markup=types.InlineKeyboardMarkup().add(
+                           types.InlineKeyboardButton('Real link', switch_inline_query_current_chat=real_link)))
 
 @dp.message_handler(commands=['help', 'start'])
 async def help_start(event: types.Message):
