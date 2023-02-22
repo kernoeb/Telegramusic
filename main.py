@@ -533,7 +533,7 @@ async def inline_echo(inline_query: InlineQuery):
         except AttributeError as e:
             print(e)
             pass
-    await bot.answer_inline_query(inline_query.id, results=items, cache_time=300)
+    await bot.answer_inline_query(inline_query.id, results=items, cache_time=100)
 
 
 if __name__ == '__main__':
