@@ -137,6 +137,8 @@ async def get_youtube_audio(event: types.Message):
             # Create thumb
             roi_img = crop_center(Image.open(image_bytes), 80, 80)
             img_byte_arr = io.BytesIO()
+            if roi_img.mode in ("RGBA", "P"):
+                roi_img = roi_img.convert("RGB")
             roi_img.save(img_byte_arr, format='jpeg')
 
             # Send audio
