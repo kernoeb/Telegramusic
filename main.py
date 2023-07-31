@@ -74,6 +74,11 @@ def crop_center(pil_img, crop_width, crop_height):
                          (img_height + crop_height) // 2))
 
 
+TRACK_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?track/(\d+)/?$"
+ALBUM_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?album/(\d+)/?$"
+PLAYLIST_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?playlist/(\d+)/?$"
+
+
 @dp.message_handler(regexp=r"(?:http?s?:\/\/)?(?:www.)?(?:m.)?(?:music.)?youtu(?:\.?be)(?:\.com)?(?:("
                            r"?:\w*.?:\/\/)?\w*.?\w*-?.?\w*\/(?:embed|e|v|watch|.*\/)?\??(?:feature=\w*\.?\w*)?&?("
                            r"?:v=)?\/?)([\w\d_-]{11})(?:\S+)?")
@@ -168,7 +173,7 @@ async def get_youtube_audio(event: types.Message):
         await tmp_err_msg.delete()
 
 
-@dp.message_handler(regexp=r"https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?track\/(\d+)\/?$")
+@dp.message_handler(regexp=TRACK_REGEX)
 async def get_track(event: types.Message):
     print(event.from_user)
     while event.text.startswith('h') is False:
@@ -192,20 +197,26 @@ async def get_track(event: types.Message):
                 dl = await download.download_trackdee(tmp, output_dir="tmp", quality_download=DEFAULT_QUALITY,
                                                       recursive_download=True,
                                                       recursive_quality=True, not_interface=False)
-            tmp_track = requests.get(API_TRACK % quote(str(event.text.split('/')[-1]))).json()
-            tmp_cover = requests.get(tmp_track['album']['cover_xl'], stream=True).raw
+            tmp_track_json = requests.get(API_TRACK % quote(str(event.text.split('/')[-1]))).json()
+            tmp_track_json_cover_url = tmp_track_json['album']['cover_xl']
+            if tmp_track_json_cover_url is None:  # If cover is not available, use md5_image
+                tmp_track_json_cover_url = f"https://e-cdns-images.dzcdn.net/images" \
+                                           f"/cover/{tmp_track_json['album']['md5_image']}/1200x0-000000-100-0-0.jpg"
+
+            tmp_cover = requests.get(tmp_track_json_cover_url, stream=True).raw
             tmp_artist_track = []
-            for c in tmp_track['contributors']:
+            for c in tmp_track_json['contributors']:
                 tmp_artist_track.append(c['name'])
-            tmp_date = tmp_track['release_date'].split('-')
+            tmp_date = tmp_track_json['release_date'].split('-')
             tmp_date = tmp_date[2] + '/' + tmp_date[1] + '/' + tmp_date[0]
             await event.answer_photo(tmp_cover,
                                      caption=('<b>Track: {}</b>'
                                               '\n{} - {}\n<a href="{}">' + __('album_link')
                                               + '</a>\n<a href="{}">' + __('track_link') + '</a>')
                                      .format(
-                                         tmp_track['title'], tmp_track['artist']['name'],
-                                         tmp_date, tmp_track['album']['link'], tmp_track['link']), parse_mode='HTML'
+                                         tmp_track_json['title'], tmp_track_json['artist']['name'],
+                                         tmp_date, tmp_track_json['album']['link'], tmp_track_json['link']),
+                                     parse_mode='HTML'
                                      )
 
             # Delete user message
@@ -215,7 +226,7 @@ async def get_track(event: types.Message):
             duration = int(MP3(tmp_song).info.length)
             tmp_song.seek(0)
             await event.answer_audio(tmp_song,
-                                     title=tmp_track['title'],
+                                     title=tmp_track_json['title'],
                                      performer=', '.join(tmp_artist_track),
                                      duration=duration,
                                      disable_notification=True)
@@ -240,7 +251,7 @@ async def get_track(event: types.Message):
         await tmp_err_msg.delete()
 
 
-@dp.message_handler(regexp=r"https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?album\/(\d+)\/?$")
+@dp.message_handler(regexp=ALBUM_REGEX)
 async def get_album(event: types.Message):
     print(event.from_user)
     while event.text.startswith('h') is False:
@@ -277,9 +288,9 @@ async def get_album(event: types.Message):
             tmp_artists = []
             for track in tracks['data']:
                 tmp_titles.append(track['title'])
-                tmp_track = requests.get(API_TRACK % quote(str(track['id']))).json()
+                tmp_track_json = requests.get(API_TRACK % quote(str(track['id']))).json()
                 tmp_artist_track = []
-                for c in tmp_track['contributors']:
+                for c in tmp_track_json['contributors']:
                     tmp_artist_track.append(c['name'])
                 tmp_artists.append(tmp_artist_track)
             tmp_date = album['release_date'].split('-')
@@ -361,7 +372,7 @@ async def get_album(event: types.Message):
         await tmp_err_msg.delete()
 
 
-@dp.message_handler(regexp=r"https?:\/\/(?:www\.)?deezer\.com\/([a-z]*\/)?playlist\/(\d+)\/?$")
+@dp.message_handler(regexp=PLAYLIST_REGEX)
 async def get_playlist(event: types.Message):
     print(event.from_user)
     while event.text.startswith('h') is False:
@@ -398,9 +409,9 @@ async def get_playlist(event: types.Message):
             tmp_artists = []
             for track in tracks['data']:
                 tmp_titles.append(track['title'])
-                tmp_track = requests.get(API_TRACK % quote(str(track['id']))).json()
+                tmp_track_json = requests.get(API_TRACK % quote(str(track['id']))).json()
                 tmp_artist_track = []
-                for c in tmp_track['contributors']:
+                for c in tmp_track_json['contributors']:
                     tmp_artist_track.append(c['name'])
                 tmp_artists.append(tmp_artist_track)
             tmp_count = 0
@@ -461,10 +472,18 @@ async def get_playlist(event: types.Message):
 async def get_shortlink(event: types.Message):
     r = requests.get(event.text)
     real_link = r.url.split('?')[0]
-    # Add a message with a button to make it easier for the user
-    await event.answer('Please use the real link: ' + real_link,
-                       reply_markup=types.InlineKeyboardMarkup().add(
-                           types.InlineKeyboardButton('Real link', switch_inline_query_current_chat=real_link)))
+    if re.match(TRACK_REGEX, real_link):
+        event.text = real_link
+        await get_track(event)
+    elif re.match(ALBUM_REGEX, real_link):
+        event.text = real_link
+        await get_album(event)
+    elif re.match(PLAYLIST_REGEX, real_link):
+        event.text = real_link
+        await get_playlist(event)
+    else:
+        await event.answer(__('download_error'))
+
 
 @dp.message_handler(commands=['help', 'start'])
 async def help_start(event: types.Message):
