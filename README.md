@@ -1,10 +1,16 @@
-# Telegramusic
+<h1 align="center">
+  <br>
+  Telegramusic
+  <br>
+</h1>
 
-A Python bot to download music from :
-- Deezer with Deezer API and Deezloader
-- YouTube
+<h4 align="center">A Telegram bot to download music from Deezer and YouTube</h4>
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/kernoeb/Telegramusic)
+<p align="center">
+<a href="https://heroku.com/deploy?template=https://github.com/kernoeb/Telegramusic">
+  <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy">
+</a>
+</p>
 
 ## Disclaimer
 :warning: For educational purposes only (or for free music)    
@@ -51,28 +57,24 @@ or send a Deezer / YouTube link
 
 ### Docker
 
-token.env
+#### Prerequisites
+
+- Docker
+- Docker compose or docker-compose (for old Docker versions)
+
+Create a `token.env` file with the following content, replacing the values with your own tokens :
+
 ```
 DEEZER_TOKEN=abcdefghijklmnoxxxxxxxxxxxx
 TELEGRAM_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ
 BOT_LANG=fr
 ```
 
-`docker run -it -d --restart=always --env-file token.env --name telegram_music_bot telegram_music_bot`
+Then run :
 
------
-
-**docker-compose.yml**  
-(example)
-
+```bash
+./update.sh
 ```
-services:
-  worker:
-    build: .
-    restart: always
-    env_file:
-      - token.env     
- ```
 
 ### Local usage
 
