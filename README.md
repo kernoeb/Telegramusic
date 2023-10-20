@@ -59,8 +59,8 @@ or send a Deezer / YouTube link
 
 #### Prerequisites
 
-- Docker
-- Docker compose or docker-compose (for old Docker versions)
+- Docker ([Linux installation](https://docs.docker.com/engine/install/ubuntu/) and [Linux post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/))
+- Docker compose (should be included in the Docker installation)
 
 Create a `token.env` file with the following content, replacing the values with your own tokens :
 
@@ -76,10 +76,16 @@ Then run :
 ./update.sh
 ```
 
+or directly :
+
+```bash
+git pull && docker-compose up -d --build
+```
+
 ### Local usage
 
 - Add `DEEZER_TOKEN` and `TELEGRAM_TOKEN` as variable environment
-- python3.X -m pip install -r requirements.txt
-- python3.X main.py
+- python3.9 -m pip install -r requirements.txt
+- python3.9 main.py
 
 (You should use a `venv`)
