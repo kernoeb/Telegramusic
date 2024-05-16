@@ -299,7 +299,11 @@ async def get_album(event: types.Message, real_link=None):
                                                       not_interface=False)
             album = requests.get(API_ALBUM % quote(str(copy_text.split('/')[-1]))).json()
             tracks = requests.get(API_ALBUM % quote(str(copy_text.split('/')[-1])) + '/tracks?limit=100').json()
-            tmp_cover = requests.get(album['cover_xl'], stream=True).raw
+            tmp_track_json_cover_url = album['cover_xl']
+            if tmp_track_json_cover_url is None:  # If cover is not available, use md5_image
+                tmp_track_json_cover_url = f"https://e-cdns-images.dzcdn.net/images" \
+                                           f"/cover/{album['md5_image']}/1200x0-000000-100-0-0.jpg"
+            tmp_cover = requests.get(tmp_track_json_cover_url, stream=True).raw
             tmp_titles = []
             tmp_artists = []
             for track in tracks['data']:
