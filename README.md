@@ -70,6 +70,15 @@ TELEGRAM_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ
 BOT_LANG=fr
 ```
 
+If you need to add `cookies` for YouTube, add the following line :
+
+> "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."
+> Please note that your account may be banned if you use this feature.
+
+```
+COOKIES_PATH=/path/to/cookies.txt
+```
+
 Then run :
 
 ```bash
