@@ -112,6 +112,7 @@ async def get_youtube_audio(event: types.Message):
 
             # if /tmp/cookies.txt exists, use it
             if os.path.exists('/tmp/cookies.txt'):
+                print('Using cookies')
                 ydl_opts['cookies'] = '/tmp/cookies.txt'
                 ydl_opts['user_agent'] = 'Mozilla/5.0 (X11; Linux i686; rv:128.0) Gecko/20100101 Firefox/128.0'
 
