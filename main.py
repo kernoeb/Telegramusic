@@ -100,8 +100,20 @@ async def get_youtube_audio(event: types.Message):
         tmp_msg = await event.answer(__('downloading'))
         downloading_users.append(event.from_user.id)
         try:
-            ydl_opts = {'outtmpl': 'tmp/yt/%(id)s.%(ext)s', 'format': 'bestaudio/best', 'postprocessors': [
-                {'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}], }
+            ydl_opts = {
+                'outtmpl': 'tmp/yt/%(id)s.%(ext)s',
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '320'
+                }],
+            }
+
+            # if /tmp/cookies.txt exists, use it
+            if os.path.exists('/tmp/cookies.txt'):
+                ydl_opts['cookies'] = '/tmp/cookies.txt'
+                ydl_opts['user_agent'] = 'Mozilla/5.0 (X11; Linux i686; rv:128.0) Gecko/20100101 Firefox/128.0'
 
             # Download file
             ydl = YoutubeDL(ydl_opts)
