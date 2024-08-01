@@ -110,12 +110,10 @@ async def get_youtube_audio(event: types.Message):
                 }],
             }
 
-            # if /tmp/cookies.txt exists, use it
-            if os.path.exists('/tmp/cookies.txt'):
+            # if cookies.txt exists, use it
+            if os.path.exists(os.environ.get('COOKIES_PATH')):
                 print('Using cookies')
-                ydl_opts['cookiefile'] = '/tmp/cookies.txt'
-
-            print(ydl_opts)
+                ydl_opts['cookiefile'] = os.environ.get('COOKIES_PATH')
 
             # Download file
             ydl = YoutubeDL(ydl_opts)
