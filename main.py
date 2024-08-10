@@ -5,7 +5,7 @@ import locale
 import logging
 import os
 import re
-import shutil
+import aioshutil
 import sys
 import traceback
 from urllib.parse import quote
@@ -174,7 +174,7 @@ async def get_youtube_audio(event: types.Message):
                                      thumbnail=BufferedInputFile(img_byte_arr.getvalue(), filename="thumb.jpg"),
                                      disable_notification=True)
             try:
-                shutil.rmtree(os.path.dirname(location))
+                await aioshutil.rmtree(os.path.dirname(location))
             except FileNotFoundError:
                 pass
         except Exception as e:
@@ -233,33 +233,62 @@ async def get_track(event: types.Message, real_link=None):
                 tmp_artist_track.append(c['name'])
             tmp_date = tmp_track_json['release_date'].split('-')
             tmp_date = tmp_date[2] + '/' + tmp_date[1] + '/' + tmp_date[0]
-            await event.answer_photo(BufferedInputFile(tmp_cover.read(), filename='cover.jpg'),
-                                     caption=('<b>Track: {}</b>'
-                                              '\n{} - {}\n<a href="{}">' + __('album_link')
-                                              + '</a>\n<a href="{}">' + __('track_link') + '</a>')
-                                     .format(
-                                         tmp_track_json['title'], tmp_track_json['artist']['name'],
-                                         tmp_date, tmp_track_json['album']['link'], tmp_track_json['link']),
-                                     parse_mode='HTML'
-                                     )
+            year = tmp_date.split('/')[2]
+            clean_title = re.sub(r'[\\/*?:"<>|]', '', tmp_track_json['title'])
+            clean_artist = re.sub(r'[\\/*?:"<>|]', '', tmp_track_json['artist']['name'])
+            final_title = clean_artist + ' - ' + clean_title + ' (' + year + ')'
 
-            # Delete user message
-            await event.delete()
+            if os.environ.get('FORMAT') == 'zip':
+                songs_parent_dir = os.path.dirname(dl.song_path)
+                with open(os.path.join(songs_parent_dir, 'cover.jpg'), 'wb') as cover:
+                    cover.write(tmp_cover.read())
+                await aioshutil.make_archive('tmp/' + final_title, 'zip', songs_parent_dir)
 
-            tmp_song = open(dl.song_path, 'rb')
-            duration = int(MP3(tmp_song).info.length)
-            tmp_song.seek(0)
-            await event.answer_audio(FSInputFile(dl.song_path),
-                                     title=tmp_track_json['title'],
-                                     performer=', '.join(tmp_artist_track),
-                                     duration=duration,
-                                     disable_notification=True)
+                await event.answer_document(FSInputFile('tmp/' + final_title + '.zip'),
+                                            caption=('<b>Track: {}</b>'
+                                                     '\n{} - {}\n<a href="{}">' + __('album_link')
+                                                     + '</a>\n<a href="{}">' + __('track_link') + '</a>')
+                                            .format(
+                                                tmp_track_json['title'], tmp_track_json['artist']['name'],
+                                                tmp_date, tmp_track_json['album']['link'], tmp_track_json['link']
+                                            ),
+                                            parse_mode='HTML')
+
+                # Delete user message
+                await event.delete()
+            else:
+                await event.answer_photo(BufferedInputFile(tmp_cover.read(), filename='cover.jpg'),
+                                         caption=('<b>Track: {}</b>'
+                                                  '\n{} - {}\n<a href="{}">' + __('album_link')
+                                                  + '</a>\n<a href="{}">' + __('track_link') + '</a>')
+                                         .format(
+                                             tmp_track_json['title'], tmp_track_json['artist']['name'],
+                                             tmp_date, tmp_track_json['album']['link'], tmp_track_json['link']),
+                                         parse_mode='HTML'
+                                         )
+
+                # Delete user message
+                await event.delete()
+
+                tmp_song = open(dl.song_path, 'rb')
+                duration = int(MP3(tmp_song).info.length)
+                tmp_song.seek(0)
+
+                await event.answer_audio(FSInputFile(dl.song_path),
+                                         title=tmp_track_json['title'],
+                                         performer=', '.join(tmp_artist_track),
+                                         duration=duration,
+                                         disable_notification=True)
+
+                tmp_song.close()
+
             await tmp_msg.delete()
-            tmp_song.close()
             try:
-                shutil.rmtree(os.path.dirname(dl.song_path))
+                await aioshutil.rmtree(os.path.dirname(dl.song_path))
             except FileNotFoundError:
                 pass
+            if os.path.exists('tmp/' + final_title + '.zip'):
+                os.remove('tmp/' + final_title + '.zip')
         except Exception as e:
             await tmp_msg.delete()
             await event.answer(__('download_error') + ' ' + str(e))
@@ -327,70 +356,97 @@ async def get_album(event: types.Message, real_link=None):
                 tmp_artists.append(tmp_artist_track)
             tmp_date = album['release_date'].split('-')
             tmp_date = tmp_date[2] + '/' + tmp_date[1] + '/' + tmp_date[0]
-            await event.answer_photo(BufferedInputFile(tmp_cover.read(), filename='cover.jpg'),
-                                     caption=('<b>Album: {}</b>\n{} - {}\n<a href="{}">' + __('album_link') + '</a>')
-                                     .format(
-                                         album['title'], album['artist']['name'],
-                                         tmp_date, album['link']
-                                     ),
-                                     parse_mode='HTML')
+            year = tmp_date.split('/')[2]
+            clean_title = re.sub(r'[\\/*?:"<>|]', '', album['title'])
+            clean_artist = re.sub(r'[\\/*?:"<>|]', '', album['artist']['name'])
+            final_title = clean_artist + ' - ' + clean_title + ' (' + year + ')'
 
-            # Delete user message
-            await event.delete()
+            if os.environ.get('FORMAT') == 'zip':
+                songs_parent_dir = os.path.dirname(dl.tracks[0].song_path)
+                with open(os.path.join(songs_parent_dir, 'cover.jpg'), 'wb') as cover:
+                    cover.write(tmp_cover.read())
+                await aioshutil.make_archive('tmp/' + final_title, 'zip', songs_parent_dir)
 
-            try:
-                tmp_count = 0
-                group_media = []
+                await event.answer_document(FSInputFile('tmp/' + final_title + '.zip'),
+                                            caption=('<b>Album: {}</b>\n{} - {}\n<a href="{}">' + __(
+                                                'album_link') + '</a>')
+                                            .format(
+                                                album['title'], album['artist']['name'],
+                                                tmp_date, album['link']
+                                            ),
+                                            parse_mode='HTML')
 
-                if len(dl.tracks) < 2 or len(dl.tracks) > 10:
-                    raise TelegramNetworkError
+                # Delete user message
+                await event.delete()
+            else:
+                await event.answer_photo(BufferedInputFile(tmp_cover.read(), filename='cover.jpg'),
+                                         caption=('<b>Album: {}</b>\n{} - {}\n<a href="{}">' + __(
+                                             'album_link') + '</a>')
+                                         .format(
+                                             album['title'], album['artist']['name'],
+                                             tmp_date, album['link']
+                                         ),
+                                         parse_mode='HTML')
 
-                all_tracks = []
-                for i in dl.tracks:
-                    tmp_song = open(i.song_path, 'rb')
-                    all_tracks.append(tmp_song)
+                # Delete user message
+                await event.delete()
 
-                for track in all_tracks:
-                    duration = int(MP3(track).info.length)
-                    track.seek(0)
-                    # Expected type 'Union[str, InputFile]', got 'BinaryIO' instead
-                    group_media.append(InputMediaAudio(media=BufferedInputFile(
-                        track.read(),
-                        filename=tmp_titles[tmp_count] + '.mp3'
-                    ),
-                        title=tmp_titles[tmp_count],
-                        performer=', '.join(tmp_artists[tmp_count]), duration=duration))
-                    tmp_count += 1
-                await event.answer_media_group(group_media, disable_notification=True)
+                try:
+                    tmp_count = 0
+                    group_media = []
 
-                for track in all_tracks:
-                    track.close()
-            except TelegramNetworkError:
-                tmp_count = 0
+                    if len(dl.tracks) < 2 or len(dl.tracks) > 10:
+                        raise TelegramNetworkError
 
-                all_tracks = []
-                for i in dl.tracks:
-                    tmp_song = open(i.song_path, 'rb')
-                    all_tracks.append(tmp_song)
+                    all_tracks = []
+                    for i in dl.tracks:
+                        tmp_song = open(i.song_path, 'rb')
+                        all_tracks.append(tmp_song)
 
-                for track in all_tracks:
-                    duration = int(MP3(track).info.length)
-                    track.seek(0)
-                    await event.answer_audio(BufferedInputFile(track.read(), filename=tmp_titles[tmp_count] + '.mp3'),
-                                             title=tmp_titles[tmp_count],
-                                             performer=', '.join(tmp_artists[tmp_count]),
-                                             duration=duration,
-                                             disable_notification=True)
-                    tmp_count += 1
+                    for track in all_tracks:
+                        duration = int(MP3(track).info.length)
+                        track.seek(0)
+                        # Expected type 'Union[str, InputFile]', got 'BinaryIO' instead
+                        group_media.append(InputMediaAudio(media=BufferedInputFile(
+                            track.read(),
+                            filename=tmp_titles[tmp_count] + '.mp3'
+                        ),
+                            title=tmp_titles[tmp_count],
+                            performer=', '.join(tmp_artists[tmp_count]), duration=duration))
+                        tmp_count += 1
+                    await event.answer_media_group(group_media, disable_notification=True)
+
+                    for track in all_tracks:
+                        track.close()
+                except TelegramNetworkError:
+                    tmp_count = 0
+
+                    all_tracks = []
+                    for i in dl.tracks:
+                        tmp_song = open(i.song_path, 'rb')
+                        all_tracks.append(tmp_song)
+
+                    for track in all_tracks:
+                        duration = int(MP3(track).info.length)
+                        track.seek(0)
+                        await event.answer_audio(
+                            BufferedInputFile(track.read(), filename=tmp_titles[tmp_count] + '.mp3'),
+                            title=tmp_titles[tmp_count],
+                            performer=', '.join(tmp_artists[tmp_count]),
+                            duration=duration,
+                            disable_notification=True)
+                        tmp_count += 1
+
+                    for track in all_tracks:
+                        track.close()
 
             await tmp_msg.delete()
             try:
-                shutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
+                await aioshutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
             except FileNotFoundError:
                 pass
-
-            for track in all_tracks:
-                track.close()
+            if os.path.exists('tmp/' + final_title + '.zip'):
+                os.remove('tmp/' + final_title + '.zip')
         except Exception as e:
             await tmp_msg.delete()
             await event.answer(__('download_error') + ' ' + str(e))

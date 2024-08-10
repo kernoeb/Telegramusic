@@ -144,3 +144,5 @@ dmypy.json
 cython_debug/
 
 pyvenv.cfg
+
+.DS_Store
