@@ -111,7 +111,7 @@ async def get_youtube_audio(event: types.Message):
             }
 
             # if cookies.txt exists, use it
-            if os.path.exists(os.environ.get('COOKIES_PATH')):
+            if os.environ.get('COOKIES_PATH') is not None and os.path.exists(os.environ.get('COOKIES_PATH')):
                 print('Using cookies')
                 ydl_opts['cookiefile'] = os.environ.get('COOKIES_PATH')
 
