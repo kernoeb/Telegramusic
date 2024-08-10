@@ -13,9 +13,16 @@ COPY patches/deezer_settings.py ./patches/deezer_settings.py
 COPY langs.json ./
 COPY main.py ./
 
-# Temp fix to avoid flac download
-RUN echo "Temp FLAC fix" && \
-    mv ./patches/deezer_settings.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/deezer_settings.py \
-    && rm -rf ./patches
+# Avoid flac download, conditionally
+ARG disable_flac=true
+ENV disable_flac=$disable_flac
+RUN if [ "$disable_flac" = "true" ]; then \
+    echo "FLAC disabled" && \
+    mv ./patches/deezer_settings.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/deezer_settings.py && \
+    rm -rf ./patches; \
+    else \
+    echo "FLAC enabled" && \
+    rm -rf ./patches; \
+    fi
 
 CMD [ "python", "./main.py" ]

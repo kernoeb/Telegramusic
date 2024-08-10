@@ -5,11 +5,11 @@ import locale
 import logging
 import os
 import re
-import aioshutil
 import sys
 import traceback
 from urllib.parse import quote
 
+import aioshutil
 import deezloader.deezloader
 import requests
 from PIL import Image
@@ -19,6 +19,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import BufferedInputFile, FSInputFile
 from aiogram.types import InlineQuery, InputTextMessageContent, InlineQueryResultArticle, InputMediaAudio
 from aioify import aioify
+from mutagen.flac import FLAC
 from mutagen.id3 import ID3, APIC, error
 from mutagen.mp3 import MP3
 from yt_dlp import YoutubeDL
@@ -37,7 +38,10 @@ API_ALBUM = API_URL + "/album/%s"
 API_SEARCH_TRK = API_URL + "/search/track/?q=%s"
 API_PLAYLIST = API_URL + "/playlist/%s"
 
-DEFAULT_QUALITY = "MP3_320"
+DEFAULT_QUALITY = "FLAC"
+if os.environ.get('disable_flac') == "true" or os.environ.get('disable_flac') is None:
+    DEFAULT_QUALITY = "MP3_320"
+print("Default quality: " + DEFAULT_QUALITY)
 
 
 # define Python user-defined exceptions
@@ -271,7 +275,13 @@ async def get_track(event: types.Message, real_link=None):
                 await event.delete()
 
                 tmp_song = open(dl.song_path, 'rb')
-                duration = int(MP3(tmp_song).info.length)
+                duration = 0
+                if os.path.splitext(dl.song_path)[1] == '.mp3':
+                    print('MP3')
+                    duration = int(MP3(tmp_song).info.length)
+                elif os.path.splitext(dl.song_path)[1] == '.flac':
+                    print('FLAC')
+                    duration = int(FLAC(tmp_song).info.length)
                 tmp_song.seek(0)
 
                 await event.answer_audio(FSInputFile(dl.song_path),
@@ -404,21 +414,32 @@ async def get_album(event: types.Message, real_link=None):
                         all_tracks.append(tmp_song)
 
                     for track in all_tracks:
-                        duration = int(MP3(track).info.length)
+                        duration = 0
+                        extension = os.path.splitext(dl.tracks[tmp_count].song_path)[1]
+                        if extension == '.mp3':
+                            print('MP3')
+                            duration = int(MP3(track).info.length)
+                        elif extension == '.flac':
+                            print('FLAC')
+                            duration = int(FLAC(track).info.length)
                         track.seek(0)
                         # Expected type 'Union[str, InputFile]', got 'BinaryIO' instead
                         group_media.append(InputMediaAudio(media=BufferedInputFile(
-                            track.read(),
-                            filename=tmp_titles[tmp_count] + '.mp3'
-                        ),
+                                track.read(),
+                                filename=tmp_titles[tmp_count] + ('.mp3' if extension == '.mp3' else '.flac')
+                            ),
                             title=tmp_titles[tmp_count],
-                            performer=', '.join(tmp_artists[tmp_count]), duration=duration))
+                            performer=', '.join(tmp_artists[tmp_count]),
+                            duration=duration)
+                        )
                         tmp_count += 1
                     await event.answer_media_group(group_media, disable_notification=True)
 
                     for track in all_tracks:
                         track.close()
-                except TelegramNetworkError:
+                except Exception as e:
+                    print(e)
+
                     tmp_count = 0
 
                     all_tracks = []
@@ -427,14 +448,25 @@ async def get_album(event: types.Message, real_link=None):
                         all_tracks.append(tmp_song)
 
                     for track in all_tracks:
-                        duration = int(MP3(track).info.length)
+                        duration = 0
+                        extension = os.path.splitext(dl.tracks[tmp_count].song_path)[1]
+                        if extension == '.mp3':
+                            print('MP3')
+                            duration = int(MP3(track).info.length)
+                        elif extension == '.flac':
+                            print('FLAC')
+                            duration = int(FLAC(track).info.length)
                         track.seek(0)
                         await event.answer_audio(
-                            BufferedInputFile(track.read(), filename=tmp_titles[tmp_count] + '.mp3'),
+                            BufferedInputFile(
+                                track.read(),
+                                filename=tmp_titles[tmp_count] + ('.mp3' if extension == '.mp3' else '.flac')
+                            ),
                             title=tmp_titles[tmp_count],
                             performer=', '.join(tmp_artists[tmp_count]),
                             duration=duration,
-                            disable_notification=True)
+                            disable_notification=True
+                            )
                         tmp_count += 1
 
                     for track in all_tracks:
