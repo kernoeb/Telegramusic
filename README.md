@@ -70,16 +70,7 @@ TELEGRAM_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ
 BOT_LANG=fr
 ```
 
-If you need to add `cookies` for YouTube, add the following line :
-
-> "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."  
-> Please note that your account may be banned if you use this feature.
-
-```
-COOKIES_PATH=/path/to/cookies.txt
-```
-
-Then run :
+#### Run
 
 ```bash
 ./update.sh
@@ -90,6 +81,14 @@ or directly :
 ```bash
 git pull && docker-compose up -d --build
 ```
+
+#### Troubleshooting
+
+> "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."  
+> Please note that your account may be banned if you use this feature.
+
+Add a `cookies.txt` in `./local_resources`.  
+To generate this file, please see : https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp.
 
 ### Local usage
 
