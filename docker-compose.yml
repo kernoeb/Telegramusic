@@ -8,7 +8,7 @@ services:
       args:
         - ENABLE_FLAC=${ENABLE_FLAC:-0}
     volumes:
-      - type: volume
+      - type: bind
         source: ./cookies.txt
         target: /tmp/cookies.txt
         read_only: true
