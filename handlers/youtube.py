@@ -17,6 +17,8 @@ from utils import __, is_downloading, add_downloading, remove_downloading
 
 youtube_router = Router()
 
+COOKIES_PATH = os.environ.get("COOKIES_PATH")
+
 
 def crop_center(pil_img, crop_width, crop_height):
     img_width, img_height = pil_img.size
@@ -56,11 +58,14 @@ async def get_youtube_audio(event: types.Message):
             }
 
             # if cookies.txt exists, use it
-            if os.environ.get("COOKIES_PATH") is not None and os.path.exists(
-                os.environ.get("COOKIES_PATH")
+            if (
+                COOKIES_PATH is not None
+                and os.path.exists(COOKIES_PATH)
+                and os.path.isfile(COOKIES_PATH)
+                and os.path.getsize(COOKIES_PATH) > 0
             ):
                 print("Using cookies")
-                ydl_opts["cookiefile"] = os.environ.get("COOKIES_PATH")
+                ydl_opts["cookiefile"] = COOKIES_PATH
 
             # Download file
             ydl = YoutubeDL(ydl_opts)
