@@ -22,7 +22,6 @@ if (
 
 locale.setlocale(locale.LC_TIME, "")
 
-
 try:
     os.mkdir("tmp")
 except FileExistsError:
@@ -54,7 +53,7 @@ async def help_start(event: types.Message):
     msg = "Hey, I'm *{}*\n".format(bot_name)
     msg += "_You can use me in inline mode :_\n"
     msg += "@{} \\(album\\|track\\|artist\\) \\<search\\>\n".format(bot_username)
-    msg += "Or just send an *Deezer* album or track *link* \\!"
+    msg += "Or just send an *Deezer* album, track *link* or YouTube *link*"
     await event.answer(msg, parse_mode="MarkdownV2")
 
 
