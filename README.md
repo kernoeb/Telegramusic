@@ -98,3 +98,13 @@ git pull && docker-compose up -d --build
 - python3.9 main.py
 
 (You should use a `venv`)
+
+### Compressed files (zip)
+
+You can send a zip file with multiple tracks inside, the bot will send you a zip file with all the tracks downloaded and the cover.
+
+In the `token.env` file, add the following line :
+
+```
+FORMAT=zip
+```
