@@ -125,7 +125,6 @@ async def get_youtube_audio(event: types.Message):
             roi_img.save(img_byte_arr, format="jpeg")
 
             # Send audio
-            print(dict_info)
             await event.answer_audio(
                 FSInputFile(location),
                 title=dict_info["title"],
