@@ -90,6 +90,8 @@ git pull && docker-compose up -d --build
 Add a `cookies.txt` in `./local_resources`.  
 To generate this file, please see : https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp.
 
+You don't need to restart the bot, it will automatically reload the cookies when downloading a YouTube video.
+
 ### Local usage
 
 - Add `DEEZER_TOKEN` and `TELEGRAM_TOKEN` as variable environment
