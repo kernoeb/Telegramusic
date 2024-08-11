@@ -65,11 +65,11 @@ async def get_track(event: types.Message, real_link=None):
     copy_text = copy_text.strip()
 
     if is_downloading(event.from_user.id) is False:
+        add_downloading(event.from_user.id)
         tmp = copy_text
         if tmp[-1] == "/":
             tmp = tmp[:-1]
         tmp_msg = await event.answer(__("downloading"))
-        add_downloading(event.from_user.id)
         try:
             try:
                 dl = await download.download_trackdee(
@@ -220,11 +220,11 @@ async def get_album(event: types.Message, real_link=None):
     copy_text = copy_text.strip()
 
     if is_downloading(event.from_user.id) is False:
+        add_downloading(event.from_user.id)
         tmp = copy_text
         if tmp[-1] == "/":
             tmp = tmp[:-1]
         tmp_msg = await event.answer(__("downloading"))
-        add_downloading(event.from_user.id)
         try:
             try:
                 dl = await download.download_albumdee(

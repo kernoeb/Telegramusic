@@ -40,8 +40,8 @@ def crop_center(pil_img, crop_width, crop_height):
 async def get_youtube_audio(event: types.Message):
     print(event.from_user)
     if is_downloading(event.from_user.id) is False:
-        tmp_msg = await event.answer(__("downloading"))
         add_downloading(event.from_user.id)
+        tmp_msg = await event.answer(__("downloading"))
         try:
             ydl_opts = {
                 "outtmpl": "tmp/yt/%(id)s.%(ext)s",
