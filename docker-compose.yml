@@ -2,7 +2,11 @@ version: "3"
 
 services:
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - ENABLE_FLAC=${ENABLE_FLAC:-0}
     restart: always
     env_file:
       - token.env

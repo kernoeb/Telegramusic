@@ -36,9 +36,9 @@ class TelegramNetworkError(Exception):
     pass
 
 
-DEFAULT_QUALITY = "FLAC"
-if os.environ.get("disable_flac") == "true" or os.environ.get("disable_flac") is None:
-    DEFAULT_QUALITY = "MP3_320"
+DEFAULT_QUALITY = "MP3_320"
+if os.environ.get("ENABLE_FLAC") == "1":
+    DEFAULT_QUALITY = "FLAC"
 
 print("Default quality: " + DEFAULT_QUALITY)
 

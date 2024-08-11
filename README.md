@@ -108,3 +108,11 @@ In the `token.env` file, add the following line :
 ```
 FORMAT=zip
 ```
+
+### Allow FLAC format
+
+If you have Deezer premium, you can allow the bot to download FLAC files by adding the following line in the `token.env` file :
+
+```
+ENABLE_FLAC=1
+```

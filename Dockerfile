@@ -17,14 +17,15 @@ COPY utils.py ./
 COPY bot.py ./
 
 # Avoid flac download, conditionally
-ARG disable_flac=true
-ENV disable_flac=$disable_flac
-RUN if [ "$disable_flac" = "true" ]; then \
-    echo "FLAC disabled" && \
+ARG ENABLE_FLAC="0"
+ENV ENABLE_FLAC=$ENABLE_FLAC
+
+RUN if [ "$ENABLE_FLAC" = "0" ]; then \
+    echo "FLAC : disabled" && \
     mv ./patches/deezer_settings.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/deezer_settings.py && \
     rm -rf ./patches; \
     else \
-    echo "FLAC enabled" && \
+    echo "FLAC : enabled" && \
     rm -rf ./patches; \
     fi
 
