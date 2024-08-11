@@ -76,21 +76,7 @@ BOT_LANG=fr
 ./update.sh
 ```
 
-or directly :
-
-```bash
-git pull && docker-compose up -d --build
-```
-
-#### Troubleshooting
-
-> "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."  
-> Please note that your account may be banned if you use this feature.
-
-Add a `cookies.txt` in `./local_resources`.  
-To generate this file, please see : https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp.
-
-You don't need to restart the bot, it will automatically reload the cookies when downloading a YouTube video.
+> Or manually : `git pull && docker-compose up -d --build`
 
 ### Local usage
 
@@ -98,7 +84,7 @@ You don't need to restart the bot, it will automatically reload the cookies when
 - python3.9 -m pip install -r requirements.txt
 - python3.9 main.py
 
-(You should use a `venv`)
+> You should use a `venv` to avoid conflicts with your system python packages
 
 ### Compressed files (zip)
 
@@ -119,3 +105,13 @@ If you have Deezer premium, you can allow the bot to download FLAC files by addi
 ```
 ENABLE_FLAC=1
 ```
+
+### Troubleshooting
+
+> "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."  
+> Please note that your account may be banned if you use this feature.
+
+Add a `cookies.txt` in `./local_resources`.  
+To generate this file, please see : https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp.
+
+You don't need to restart the bot, it will automatically reload the cookies when downloading a YouTube video.
