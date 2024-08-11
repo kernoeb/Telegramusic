@@ -10,8 +10,11 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY patches/deezer_settings.py ./patches/deezer_settings.py
+COPY handlers ./handlers
 COPY langs.json ./
 COPY main.py ./
+COPY utils.py ./
+COPY bot.py ./
 
 # Avoid flac download, conditionally
 ARG disable_flac=true
