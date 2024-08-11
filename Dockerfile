@@ -20,6 +20,8 @@ COPY bot.py ./
 ARG ENABLE_FLAC="0"
 ENV ENABLE_FLAC=$ENABLE_FLAC
 
+RUN echo "> ENABLE_FLAC : $ENABLE_FLAC"
+
 RUN if [ "$ENABLE_FLAC" = "0" ]; then \
     echo "FLAC : disabled" && \
     mv ./patches/deezer_settings.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/deezer_settings.py && \
