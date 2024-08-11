@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+cd "$SCRIPT_DIR" || exit 1
+
+git pull || exit 1
+
 # Check if `token.env` file exists
 if [ ! -f token.env ]; then
   echo "token.env file not found"
@@ -15,11 +20,6 @@ else
   ENABLE_FLAC=0
   echo "FLAC is disabled"
 fi
-
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-cd "$SCRIPT_DIR" || exit 1
-
-git pull || exit 1
 
 # check if docker-compose or docker compose is installed
 if [ -x "$(command -v docker-compose)" ]; then
