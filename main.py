@@ -5,12 +5,11 @@ import os
 import sys
 
 from aiogram import types
-from aiogram.filters import CommandStart
-
-from handlers.deezer import deezer_router
-from handlers.youtube import youtube_router
+from aiogram.filters import Command
 
 from bot import bot, dp
+from handlers.deezer import deezer_router
+from handlers.youtube import youtube_router
 
 if (
     sys.version_info.major != 3
@@ -35,7 +34,7 @@ except FileExistsError:
 logging.basicConfig(level=logging.INFO)
 
 
-@dp.message(CommandStart())
+@dp.message(Command(commands=["start", "help"]))
 async def help_start(event: types.Message):
     bot_info = await bot.get_me()
     bot_name = (
