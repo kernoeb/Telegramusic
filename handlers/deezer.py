@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 from urllib.parse import quote
+import traceback
 
 import aioshutil
 import deezloader.deezloader
@@ -19,6 +20,8 @@ from aiogram.types import (
 from aioify import aioify
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
+import math
+from zipfile import ZipFile, ZIP_DEFLATED
 
 from bot import bot
 from utils import __, is_downloading, add_downloading, remove_downloading
@@ -51,6 +54,66 @@ API_PLAYLIST = API_URL + "/playlist/%s"
 TRACK_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?track/(\d+)/?$"
 ALBUM_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?album/(\d+)/?$"
 PLAYLIST_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?playlist/(\d+)/?$"
+
+
+# Function to split files into multiple zips
+# 50MB is the limit for Telegram, but we'll use 48MB to be safe
+def create_multi_part_zip(source_dir, output_name, dl_tracks, max_size_mb=48):
+    max_size = max_size_mb * 1024 * 1024  # Convert to bytes
+
+    # Get all files in the directory
+    all_files = set(os.path.join(source_dir, f) for f in os.listdir(source_dir))
+
+    # Ensure cover.jpg is the first file
+    cover_file = next(
+        (f for f in all_files if os.path.basename(f) == "cover.jpg"), None
+    )
+    files = [cover_file] if cover_file else []
+    all_files.discard(cover_file)
+
+    # Add tracks in the order they appear in dl_tracks
+    for track in dl_tracks:
+        track_file = os.path.join(source_dir, os.path.basename(track.song_path))
+        if track_file in all_files:
+            files.append(track_file)
+            all_files.remove(track_file)
+
+    # Add any remaining files
+    files.extend(sorted(all_files))
+
+    total_size = sum(os.path.getsize(f) for f in files if f)
+
+    if total_size <= max_size:
+        # If total size is less than max_size, create a single zip file
+        with ZipFile(f"{output_name}.zip", "w", ZIP_DEFLATED) as zipf:
+            for file in files:
+                if file:
+                    zipf.write(file, os.path.basename(file))
+        return [f"{output_name}.zip"]
+
+    # Calculate the number of parts needed
+    num_parts = math.ceil(total_size / max_size)
+    tmp_zip_files = []
+
+    for i in range(num_parts):
+        zip_name = f"{output_name}_part{i + 1}.zip"
+        with ZipFile(zip_name, "w", ZIP_DEFLATED) as zipf:
+            current_size = 0
+            while files and current_size < max_size:
+                file = files.pop(0)
+                if file:
+                    file_size = os.path.getsize(file)
+                    if current_size + file_size <= max_size or (
+                        i == 0 and os.path.basename(file) == "cover.jpg"
+                    ):
+                        zipf.write(file, os.path.basename(file))
+                        current_size += file_size
+                    else:
+                        files.insert(0, file)
+                        break
+        tmp_zip_files.append(zip_name)
+
+    return tmp_zip_files
 
 
 @deezer_router.message(F.text.regexp(TRACK_REGEX))
@@ -283,24 +346,35 @@ async def get_album(event: types.Message, real_link=None):
                 songs_parent_dir = os.path.dirname(dl.tracks[0].song_path)
                 with open(os.path.join(songs_parent_dir, "cover.jpg"), "wb") as cover:
                     cover.write(tmp_cover.read())
-                await aioshutil.make_archive(
-                    "tmp/" + final_title, "zip", songs_parent_dir
+
+                # Create multi-part zip files
+                zip_files = create_multi_part_zip(
+                    songs_parent_dir, "tmp/" + final_title, dl.tracks
                 )
 
-                await event.answer_document(
-                    FSInputFile("tmp/" + final_title + ".zip"),
-                    caption=(
-                        '<b>Album: {}</b>\n{} - {}\n<a href="{}">'
-                        + __("album_link")
-                        + "</a>"
-                    ).format(
-                        album["title"], album["artist"]["name"], tmp_date, album["link"]
-                    ),
-                    parse_mode="HTML",
-                )
+                # Send each zip file
+                for zip_file in zip_files:
+                    await event.answer_document(
+                        FSInputFile(zip_file),
+                        caption=(
+                            '<b>Album: {}</b>\n{} - {}\n<a href="{}">'
+                            + __("album_link")
+                            + "</a>"
+                        ).format(
+                            album["title"],
+                            album["artist"]["name"],
+                            tmp_date,
+                            album["link"],
+                        ),
+                        parse_mode="HTML",
+                    )
 
                 # Delete user message
                 await event.delete()
+
+                for zip_file in zip_files:
+                    if os.path.exists(zip_file):
+                        os.remove(zip_file)
             else:
                 await event.answer_photo(
                     BufferedInputFile(tmp_cover.read(), filename="cover.jpg"),
@@ -400,9 +474,8 @@ async def get_album(event: types.Message, real_link=None):
                 await aioshutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
             except FileNotFoundError:
                 pass
-            if os.path.exists("tmp/" + final_title + ".zip"):
-                os.remove("tmp/" + final_title + ".zip")
         except Exception as e:
+            traceback.print_exc()
             await tmp_msg.delete()
             await event.answer(__("download_error") + " " + str(e))
         finally:
