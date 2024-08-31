@@ -1,8 +1,11 @@
 import asyncio
+import hashlib
+import math
 import os
 import re
-from urllib.parse import quote
 import traceback
+from urllib.parse import quote
+from zipfile import ZipFile, ZIP_DEFLATED
 
 import aioshutil
 import deezloader.deezloader
@@ -20,8 +23,7 @@ from aiogram.types import (
 from aioify import aioify
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
-import math
-from zipfile import ZipFile, ZIP_DEFLATED
+from unidecode import unidecode
 
 from bot import bot
 from utils import __, is_downloading, add_downloading, remove_downloading
@@ -36,16 +38,12 @@ class TelegramNetworkError(Exception):
     pass
 
 
-DEFAULT_QUALITY = "MP3_320"
-if os.environ.get("ENABLE_FLAC") == "1":
-    DEFAULT_QUALITY = "FLAC"
-
+DEFAULT_QUALITY = "FLAC" if os.environ.get("ENABLE_FLAC") == "1" else "MP3_320"
 print("Default quality: " + DEFAULT_QUALITY)
 
 # Constants
 DEEZER_URL = "https://deezer.com"
 API_URL = "https://api.deezer.com"
-
 API_TRACK = API_URL + "/track/%s"
 API_ALBUM = API_URL + "/album/%s"
 API_SEARCH_TRK = API_URL + "/search/track/?q=%s"
@@ -55,205 +53,283 @@ TRACK_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?track/(\d+)/?$"
 ALBUM_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?album/(\d+)/?$"
 PLAYLIST_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?playlist/(\d+)/?$"
 
+COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
+FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
-# Function to split files into multiple zips
-# 50MB is the limit for Telegram, but we'll use 48MB to be safe
-def create_multi_part_zip(source_dir, output_name, dl_tracks, max_size_mb=48):
+
+async def download_track(tmp):
+    return await download.download_trackdee(
+        tmp,
+        output_dir="../tmp",
+        quality_download=DEFAULT_QUALITY,
+        recursive_download=True,
+        recursive_quality=True,
+        not_interface=False,
+    )
+
+
+async def download_album(tmp):
+    return await download.download_albumdee(
+        tmp,
+        output_dir="../tmp",
+        quality_download=DEFAULT_QUALITY,
+        recursive_download=True,
+        recursive_quality=True,
+        not_interface=False,
+    )
+
+
+import os
+
+
+def add_file_to_zip(zipf, file, track_file_mapping):
+    """Helper function to add a file to the zip."""
+    zip_name = track_file_mapping.get(file, os.path.basename(file))
+    zipf.write(file, zip_name)
+
+
+def create_single_zip(files, track_file_mapping, output_name):
+    """Create a single zip file."""
+    with ZipFile(f"{output_name}.zip", "w", ZIP_DEFLATED) as zipf:
+        for file in files:
+            add_file_to_zip(zipf, file, track_file_mapping)
+    return [f"{output_name}.zip"]
+
+
+def create_multi_part_zip(source_dir, output_name, dl_tracks, max_size_mb=45):
     max_size = max_size_mb * 1024 * 1024  # Convert to bytes
-
-    # Get all files in the directory
     all_files = set(os.path.join(source_dir, f) for f in os.listdir(source_dir))
 
-    # Ensure cover.jpg is the first file
+    # Find and prioritize the cover file
     cover_file = next(
         (f for f in all_files if os.path.basename(f) == "cover.jpg"), None
     )
     files = [cover_file] if cover_file else []
-    all_files.discard(cover_file)
+    if cover_file:
+        all_files.discard(cover_file)
 
-    # Add tracks in the order they appear in dl_tracks
+    # Map track paths to their corresponding file names
+    track_file_mapping = {}
     for track in dl_tracks:
         track_file = os.path.join(source_dir, os.path.basename(track.song_path))
         if track_file in all_files:
             files.append(track_file)
             all_files.remove(track_file)
+            track_file_mapping[track_file] = f"{track.song_name}{track.file_format}"
 
     # Add any remaining files
     files.extend(sorted(all_files))
 
+    # Check total size of all files
     total_size = sum(os.path.getsize(f) for f in files if f)
 
     if total_size <= max_size:
-        # If total size is less than max_size, create a single zip file
-        with ZipFile(f"{output_name}.zip", "w", ZIP_DEFLATED) as zipf:
-            for file in files:
-                if file:
-                    zipf.write(file, os.path.basename(file))
-        return [f"{output_name}.zip"]
+        return create_single_zip(files, track_file_mapping, output_name)
 
-    # Calculate the number of parts needed
-    num_parts = math.ceil(total_size / max_size)
+    # Handle multi-part zip creation
     tmp_zip_files = []
+    current_files = files[:]
+    num_parts = math.ceil(total_size / max_size)
 
     for i in range(num_parts):
         zip_name = f"{output_name}_part{i + 1}.zip"
         with ZipFile(zip_name, "w", ZIP_DEFLATED) as zipf:
             current_size = 0
-            while files and current_size < max_size:
-                file = files.pop(0)
-                if file:
-                    file_size = os.path.getsize(file)
-                    if current_size + file_size <= max_size or (
-                        i == 0 and os.path.basename(file) == "cover.jpg"
-                    ):
-                        zipf.write(file, os.path.basename(file))
-                        current_size += file_size
-                    else:
-                        files.insert(0, file)
-                        break
+            while current_files and current_size < max_size:
+                file = current_files[0]  # Peek the first file
+                file_size = os.path.getsize(file)
+
+                # Handle case where a single file is larger than max_size
+                if file_size > max_size:
+                    raise ValueError(
+                        f"File {file} exceeds the maximum allowed zip size."
+                    )
+
+                # Check if file can be added to the current zip part
+                if (
+                    current_size + file_size <= max_size
+                    or len(tmp_zip_files) == num_parts - 1
+                ):
+                    add_file_to_zip(zipf, file, track_file_mapping)
+                    current_files.pop(0)  # Actually remove the file after adding
+                    current_size += file_size
+                else:
+                    break
+
         tmp_zip_files.append(zip_name)
+
+    # If there are any remaining files, ensure they are added to the last zip part
+    if current_files:
+        with ZipFile(tmp_zip_files[-1], "a", ZIP_DEFLATED) as zipf:
+            for file in current_files:
+                add_file_to_zip(zipf, file, track_file_mapping)
 
     return tmp_zip_files
 
 
+async def get_track_info(track_id):
+    track_json = requests.get(API_TRACK % quote(str(track_id))).json()
+    cover_url = (
+        track_json["album"]["cover_xl"]
+        or f"https://e-cdns-images.dzcdn.net/images/cover/{track_json['album']['md5_image']}/1200x0-000000-100-0-0.jpg"
+    )
+    cover = requests.get(cover_url, stream=True).raw
+    artists = [c["name"] for c in track_json["contributors"]]
+    release_date = track_json["release_date"].split("-")
+    release_date = f"{release_date[2]}/{release_date[1]}/{release_date[0]}"
+    year = release_date.split("/")[2]
+    clean_title = re.sub(r'[\\/*?:"<>|]', "", track_json["title"])
+    clean_artist = re.sub(r'[\\/*?:"<>|]', "", track_json["artist"]["name"])
+    final_title = f"{clean_artist} - {clean_title} ({year})"
+    return track_json, cover, artists, release_date, final_title
+
+
+async def get_album_info(album_id):
+    album = requests.get(API_ALBUM % quote(str(album_id))).json()
+    tracks = requests.get(API_ALBUM % quote(str(album_id)) + "/tracks?limit=100").json()
+    cover_url = (
+        album["cover_xl"]
+        or f"https://e-cdns-images.dzcdn.net/images/cover/{album['md5_image']}/1200x0-000000-100-0-0.jpg"
+    )
+    cover = requests.get(cover_url, stream=True).raw
+    titles = [track["title"] for track in tracks["data"]]
+    artists = [
+        [
+            c["name"]
+            for c in requests.get(API_TRACK % quote(str(track["id"]))).json()[
+                "contributors"
+            ]
+        ]
+        for track in tracks["data"]
+    ]
+    release_date = album["release_date"].split("-")
+    release_date = f"{release_date[2]}/{release_date[1]}/{release_date[0]}"
+    year = release_date.split("/")[2]
+    clean_title = re.sub(r'[\\/*?:"<>|]', "", album["title"])
+    clean_artist = re.sub(r'[\\/*?:"<>|]', "", album["artist"]["name"])
+    final_title = f"{clean_artist} - {clean_title} ({year})"
+    return album, tracks, cover, titles, artists, release_date, final_title
+
+
+async def send_track(event, track_json, cover, artists, release_date, final_title, dl):
+    if os.environ.get("FORMAT") == "zip":
+        await send_zip(event, track_json, cover, release_date, final_title, dl)
+    else:
+        await send_audio(event, track_json, cover, artists, release_date, dl)
+
+
+async def send_zip(event, json_data, cover, release_date, final_title, dl):
+    songs_parent_dir = os.path.dirname(dl.song_path)
+    read_cover = cover.read()
+    with open(os.path.join(songs_parent_dir, "cover.jpg"), "wb") as cover_file:
+        cover_file.write(read_cover)
+
+    if COPY_FILES_PATH is not None and FILE_LINK_TEMPLATE is not None:
+        md5_hash = hashlib.md5(final_title.encode()).hexdigest()[:8]
+        zip_name = f"{unidecode(json_data['artist']['name'])} - {unidecode(json_data['title'])} ({md5_hash}).zip"
+        url_safe_zip_name = re.sub(r"[^.a-zA-Z0-9()_-]", "_", zip_name)
+
+        with ZipFile(
+            f"{COPY_FILES_PATH}/{url_safe_zip_name}", "w", ZIP_DEFLATED
+        ) as zipf:
+            zipf.write(dl.song_path, dl.song_name + dl.file_format)
+            zipf.write(os.path.join(songs_parent_dir, "cover.jpg"), "cover.jpg")
+
+        await event.answer_photo(
+            BufferedInputFile(read_cover, filename="cover.jpg"),
+            caption=get_caption(json_data, release_date),
+            parse_mode="HTML",
+        )
+
+        await event.answer(FILE_LINK_TEMPLATE.format(url_safe_zip_name))
+    else:
+        await aioshutil.make_archive("tmp/" + final_title, "zip", songs_parent_dir)
+
+        await event.answer_document(
+            FSInputFile("tmp/" + final_title + ".zip"),
+            caption=get_caption(json_data, release_date),
+            parse_mode="HTML",
+        )
+
+    await event.delete()
+    if os.path.exists("tmp/" + final_title + ".zip"):
+        os.remove("tmp/" + final_title + ".zip")
+
+
+async def send_audio(event, json_data, cover, artists, release_date, dl):
+    await event.answer_photo(
+        BufferedInputFile(cover.read(), filename="cover.jpg"),
+        caption=get_caption(json_data, release_date),
+        parse_mode="HTML",
+    )
+    await event.delete()
+
+    tmp_song = open(dl.song_path, "rb")
+    duration = get_audio_duration(tmp_song, dl.song_path)
+    tmp_song.seek(0)
+
+    await event.answer_audio(
+        FSInputFile(dl.song_path),
+        title=json_data["title"],
+        performer=", ".join(artists),
+        duration=duration,
+        disable_notification=True,
+    )
+    tmp_song.close()
+
+
+def get_caption(json_data, release_date):
+    return (
+        "<b>Track: {}</b>"
+        '\n{} - {}\n<a href="{}">'
+        + __("album_link")
+        + '</a>\n<a href="{}">'
+        + __("track_link")
+        + "</a>"
+    ).format(
+        json_data["title"],
+        json_data["artist"]["name"],
+        release_date,
+        json_data["album"]["link"],
+        json_data["link"],
+    )
+
+
+def get_audio_duration(file, path):
+    extension = os.path.splitext(path)[1]
+    if extension == ".mp3":
+        return int(MP3(file).info.length)
+    elif extension == ".flac":
+        return int(FLAC(file).info.length)
+    return 0
+
+
 @deezer_router.message(F.text.regexp(TRACK_REGEX))
 async def get_track(event: types.Message, real_link=None):
-    print(event.from_user)
-    if real_link is None:
-        copy_text = event.text
-    else:
-        copy_text = real_link
-    while copy_text.startswith("h") is False:
+    copy_text = real_link or event.text
+    while not copy_text.startswith("h"):
         copy_text = copy_text[1:]
     copy_text = copy_text.strip()
 
-    if is_downloading(event.from_user.id) is False:
+    if not is_downloading(event.from_user.id):
         add_downloading(event.from_user.id)
-        tmp = copy_text
-        if tmp[-1] == "/":
-            tmp = tmp[:-1]
+        tmp = copy_text.rstrip("/")
         tmp_msg = await event.answer(__("downloading"))
         try:
-            try:
-                dl = await download.download_trackdee(
-                    tmp,
-                    output_dir="../tmp",
-                    quality_download=DEFAULT_QUALITY,
-                    recursive_download=True,
-                    recursive_quality=True,
-                    not_interface=False,
-                )
-            except:
-                # Let's try again...
-                await asyncio.sleep(1)
-                dl = await download.download_trackdee(
-                    tmp,
-                    output_dir="../tmp",
-                    quality_download=DEFAULT_QUALITY,
-                    recursive_download=True,
-                    recursive_quality=True,
-                    not_interface=False,
-                )
-            tmp_track_json = requests.get(
-                API_TRACK % quote(str(copy_text.split("/")[-1]))
-            ).json()
-            tmp_track_json_cover_url = tmp_track_json["album"]["cover_xl"]
-            if (
-                tmp_track_json_cover_url is None
-            ):  # If cover is not available, use md5_image
-                tmp_track_json_cover_url = (
-                    f"https://e-cdns-images.dzcdn.net/images"
-                    f"/cover/{tmp_track_json['album']['md5_image']}/1200x0-000000-100-0-0.jpg"
-                )
-
-            tmp_cover = requests.get(tmp_track_json_cover_url, stream=True).raw
-            tmp_artist_track = []
-            for c in tmp_track_json["contributors"]:
-                tmp_artist_track.append(c["name"])
-            tmp_date = tmp_track_json["release_date"].split("-")
-            tmp_date = tmp_date[2] + "/" + tmp_date[1] + "/" + tmp_date[0]
-            year = tmp_date.split("/")[2]
-            clean_title = re.sub(r'[\\/*?:"<>|]', "", tmp_track_json["title"])
-            clean_artist = re.sub(r'[\\/*?:"<>|]', "", tmp_track_json["artist"]["name"])
-            final_title = clean_artist + " - " + clean_title + " (" + year + ")"
-
-            if os.environ.get("FORMAT") == "zip":
-                songs_parent_dir = os.path.dirname(dl.song_path)
-                with open(os.path.join(songs_parent_dir, "cover.jpg"), "wb") as cover:
-                    cover.write(tmp_cover.read())
-                await aioshutil.make_archive(
-                    "tmp/" + final_title, "zip", songs_parent_dir
-                )
-
-                await event.answer_document(
-                    FSInputFile("tmp/" + final_title + ".zip"),
-                    caption=(
-                        "<b>Track: {}</b>"
-                        '\n{} - {}\n<a href="{}">'
-                        + __("album_link")
-                        + '</a>\n<a href="{}">'
-                        + __("track_link")
-                        + "</a>"
-                    ).format(
-                        tmp_track_json["title"],
-                        tmp_track_json["artist"]["name"],
-                        tmp_date,
-                        tmp_track_json["album"]["link"],
-                        tmp_track_json["link"],
-                    ),
-                    parse_mode="HTML",
-                )
-
-                # Delete user message
-                await event.delete()
-            else:
-                await event.answer_photo(
-                    BufferedInputFile(tmp_cover.read(), filename="cover.jpg"),
-                    caption=(
-                        "<b>Track: {}</b>"
-                        '\n{} - {}\n<a href="{}">'
-                        + __("album_link")
-                        + '</a>\n<a href="{}">'
-                        + __("track_link")
-                        + "</a>"
-                    ).format(
-                        tmp_track_json["title"],
-                        tmp_track_json["artist"]["name"],
-                        tmp_date,
-                        tmp_track_json["album"]["link"],
-                        tmp_track_json["link"],
-                    ),
-                    parse_mode="HTML",
-                )
-
-                # Delete user message
-                await event.delete()
-
-                tmp_song = open(dl.song_path, "rb")
-                duration = 0
-                if os.path.splitext(dl.song_path)[1] == ".mp3":
-                    print("MP3")
-                    duration = int(MP3(tmp_song).info.length)
-                elif os.path.splitext(dl.song_path)[1] == ".flac":
-                    print("FLAC")
-                    duration = int(FLAC(tmp_song).info.length)
-                tmp_song.seek(0)
-
-                await event.answer_audio(
-                    FSInputFile(dl.song_path),
-                    title=tmp_track_json["title"],
-                    performer=", ".join(tmp_artist_track),
-                    duration=duration,
-                    disable_notification=True,
-                )
-
-                tmp_song.close()
-
+            dl = await download_track(tmp)
+            track_id = copy_text.split("/")[-1]
+            (
+                track_json,
+                cover,
+                artists,
+                release_date,
+                final_title,
+            ) = await get_track_info(track_id)
+            await send_track(
+                event, track_json, cover, artists, release_date, final_title, dl
+            )
             await tmp_msg.delete()
-            try:
-                await aioshutil.rmtree(os.path.dirname(dl.song_path))
-            except FileNotFoundError:
-                pass
+            await aioshutil.rmtree(os.path.dirname(dl.song_path))
             if os.path.exists("tmp/" + final_title + ".zip"):
                 os.remove("tmp/" + final_title + ".zip")
         except Exception as e:
@@ -273,207 +349,37 @@ async def get_track(event: types.Message, real_link=None):
 
 @deezer_router.message(F.text.regexp(ALBUM_REGEX))
 async def get_album(event: types.Message, real_link=None):
-    print(event.from_user)
-    if real_link is None:
-        copy_text = event.text
-    else:
-        copy_text = real_link
-    while copy_text.startswith("h") is False:
+    copy_text = real_link or event.text
+    while not copy_text.startswith("h"):
         copy_text = copy_text[1:]
     copy_text = copy_text.strip()
 
-    if is_downloading(event.from_user.id) is False:
+    if not is_downloading(event.from_user.id):
         add_downloading(event.from_user.id)
-        tmp = copy_text
-        if tmp[-1] == "/":
-            tmp = tmp[:-1]
+        tmp = copy_text.rstrip("/")
         tmp_msg = await event.answer(__("downloading"))
         try:
-            try:
-                dl = await download.download_albumdee(
-                    tmp,
-                    output_dir="../tmp",
-                    quality_download=DEFAULT_QUALITY,
-                    recursive_download=True,
-                    recursive_quality=True,
-                    not_interface=False,
-                )
-            except:
-                # Let's try again...
-                await asyncio.sleep(1)
-                dl = await download.download_albumdee(
-                    tmp,
-                    output_dir="../tmp",
-                    quality_download=DEFAULT_QUALITY,
-                    recursive_download=True,
-                    recursive_quality=True,
-                    not_interface=False,
-                )
-            album = requests.get(
-                API_ALBUM % quote(str(copy_text.split("/")[-1]))
-            ).json()
-            tracks = requests.get(
-                API_ALBUM % quote(str(copy_text.split("/")[-1])) + "/tracks?limit=100"
-            ).json()
-            tmp_track_json_cover_url = album["cover_xl"]
-            if (
-                tmp_track_json_cover_url is None
-            ):  # If cover is not available, use md5_image
-                tmp_track_json_cover_url = (
-                    f"https://e-cdns-images.dzcdn.net/images"
-                    f"/cover/{album['md5_image']}/1200x0-000000-100-0-0.jpg"
-                )
-            tmp_cover = requests.get(tmp_track_json_cover_url, stream=True).raw
-            tmp_titles = []
-            tmp_artists = []
-            for track in tracks["data"]:
-                tmp_titles.append(track["title"])
-                tmp_track_json = requests.get(
-                    API_TRACK % quote(str(track["id"]))
-                ).json()
-                tmp_artist_track = []
-                for c in tmp_track_json["contributors"]:
-                    tmp_artist_track.append(c["name"])
-                tmp_artists.append(tmp_artist_track)
-            tmp_date = album["release_date"].split("-")
-            tmp_date = tmp_date[2] + "/" + tmp_date[1] + "/" + tmp_date[0]
-            year = tmp_date.split("/")[2]
-            clean_title = re.sub(r'[\\/*?:"<>|]', "", album["title"])
-            clean_artist = re.sub(r'[\\/*?:"<>|]', "", album["artist"]["name"])
-            final_title = clean_artist + " - " + clean_title + " (" + year + ")"
+            dl = await download_album(tmp)
+            album_id = copy_text.split("/")[-1]
+            (
+                album,
+                tracks,
+                cover,
+                titles,
+                artists,
+                release_date,
+                final_title,
+            ) = await get_album_info(album_id)
 
             if os.environ.get("FORMAT") == "zip":
-                songs_parent_dir = os.path.dirname(dl.tracks[0].song_path)
-                with open(os.path.join(songs_parent_dir, "cover.jpg"), "wb") as cover:
-                    cover.write(tmp_cover.read())
-
-                # Create multi-part zip files
-                zip_files = create_multi_part_zip(
-                    songs_parent_dir, "tmp/" + final_title, dl.tracks
-                )
-
-                # Send each zip file
-                for zip_file in zip_files:
-                    await event.answer_document(
-                        FSInputFile(zip_file),
-                        caption=(
-                            '<b>Album: {}</b>\n{} - {}\n<a href="{}">'
-                            + __("album_link")
-                            + "</a>"
-                        ).format(
-                            album["title"],
-                            album["artist"]["name"],
-                            tmp_date,
-                            album["link"],
-                        ),
-                        parse_mode="HTML",
-                    )
-
-                # Delete user message
-                await event.delete()
-
-                for zip_file in zip_files:
-                    if os.path.exists(zip_file):
-                        os.remove(zip_file)
+                await send_album_zip(event, album, cover, release_date, final_title, dl)
             else:
-                await event.answer_photo(
-                    BufferedInputFile(tmp_cover.read(), filename="cover.jpg"),
-                    caption=(
-                        '<b>Album: {}</b>\n{} - {}\n<a href="{}">'
-                        + __("album_link")
-                        + "</a>"
-                    ).format(
-                        album["title"], album["artist"]["name"], tmp_date, album["link"]
-                    ),
-                    parse_mode="HTML",
+                await send_album_audio(
+                    event, album, cover, titles, artists, release_date, dl
                 )
-
-                # Delete user message
-                await event.delete()
-
-                try:
-                    tmp_count = 0
-                    group_media = []
-
-                    if len(dl.tracks) < 2 or len(dl.tracks) > 10:
-                        raise TelegramNetworkError
-
-                    all_tracks = []
-                    for i in dl.tracks:
-                        tmp_song = open(i.song_path, "rb")
-                        all_tracks.append(tmp_song)
-
-                    for track in all_tracks:
-                        duration = 0
-                        extension = os.path.splitext(dl.tracks[tmp_count].song_path)[1]
-                        if extension == ".mp3":
-                            print("MP3")
-                            duration = int(MP3(track).info.length)
-                        elif extension == ".flac":
-                            print("FLAC")
-                            duration = int(FLAC(track).info.length)
-                        track.seek(0)
-                        # Expected type 'Union[str, InputFile]', got 'BinaryIO' instead
-                        group_media.append(
-                            InputMediaAudio(
-                                media=BufferedInputFile(
-                                    track.read(),
-                                    filename=tmp_titles[tmp_count]
-                                    + (".mp3" if extension == ".mp3" else ".flac"),
-                                ),
-                                title=tmp_titles[tmp_count],
-                                performer=", ".join(tmp_artists[tmp_count]),
-                                duration=duration,
-                            )
-                        )
-                        tmp_count += 1
-                    await event.answer_media_group(
-                        group_media, disable_notification=True
-                    )
-
-                    for track in all_tracks:
-                        track.close()
-                except Exception as e:
-                    print(e)
-
-                    tmp_count = 0
-
-                    all_tracks = []
-                    for i in dl.tracks:
-                        tmp_song = open(i.song_path, "rb")
-                        all_tracks.append(tmp_song)
-
-                    for track in all_tracks:
-                        duration = 0
-                        extension = os.path.splitext(dl.tracks[tmp_count].song_path)[1]
-                        if extension == ".mp3":
-                            print("MP3")
-                            duration = int(MP3(track).info.length)
-                        elif extension == ".flac":
-                            print("FLAC")
-                            duration = int(FLAC(track).info.length)
-                        track.seek(0)
-                        await event.answer_audio(
-                            BufferedInputFile(
-                                track.read(),
-                                filename=tmp_titles[tmp_count]
-                                + (".mp3" if extension == ".mp3" else ".flac"),
-                            ),
-                            title=tmp_titles[tmp_count],
-                            performer=", ".join(tmp_artists[tmp_count]),
-                            duration=duration,
-                            disable_notification=True,
-                        )
-                        tmp_count += 1
-
-                    for track in all_tracks:
-                        track.close()
 
             await tmp_msg.delete()
-            try:
-                await aioshutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
-            except FileNotFoundError:
-                pass
+            await aioshutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
         except Exception as e:
             traceback.print_exc()
             await tmp_msg.delete()
@@ -483,12 +389,121 @@ async def get_album(event: types.Message, real_link=None):
                 remove_downloading(event.from_user.id)
             except ValueError:
                 pass
-
     else:
         tmp_err_msg = await event.answer(__("running_download"))
         await event.delete()
         await asyncio.sleep(2)
         await tmp_err_msg.delete()
+
+
+async def send_album_zip(event, album, cover, release_date, final_title, dl):
+    songs_parent_dir = os.path.dirname(dl.tracks[0].song_path)
+    read_cover = cover.read()
+    with open(os.path.join(songs_parent_dir, "cover.jpg"), "wb") as cover_file:
+        cover_file.write(read_cover)
+
+    if COPY_FILES_PATH is not None and FILE_LINK_TEMPLATE is not None:
+        md5_hash = hashlib.md5(final_title.encode()).hexdigest()[:8]
+        zip_name = f"{unidecode(album['artist']['name'])} - {unidecode(album['title'])} ({md5_hash}).zip"
+        url_safe_zip_name = re.sub(r"[^.a-zA-Z0-9()_-]", "_", zip_name)
+
+        with ZipFile(
+            f"{COPY_FILES_PATH}/{url_safe_zip_name}", "w", ZIP_DEFLATED
+        ) as zipf:
+            for track in dl.tracks:
+                zipf.write(track.song_path, track.song_name + track.file_format)
+
+        await event.answer_photo(
+            BufferedInputFile(read_cover, filename="cover.jpg"),
+            caption=get_album_caption(album, release_date),
+            parse_mode="HTML",
+        )
+
+        await event.answer(FILE_LINK_TEMPLATE.format(url_safe_zip_name))
+    else:
+        zip_files = create_multi_part_zip(
+            songs_parent_dir, "tmp/" + final_title, dl.tracks
+        )
+        for zip_file in zip_files:
+            await event.answer_document(
+                FSInputFile(zip_file),
+                caption=get_album_caption(album, release_date),
+                parse_mode="HTML",
+            )
+
+        for zip_file in zip_files:
+            if os.path.exists(zip_file):
+                os.remove(zip_file)
+
+    await event.delete()
+
+
+async def send_album_audio(event, album, cover, titles, artists, release_date, dl):
+    read_cover = cover.read()
+    await event.answer_photo(
+        BufferedInputFile(read_cover, filename="cover.jpg"),
+        caption=get_album_caption(album, release_date),
+        parse_mode="HTML",
+    )
+    await event.delete()
+
+    try:
+        if 2 <= len(dl.tracks) <= 10:
+            await send_album_media_group(event, dl.tracks, titles, artists)
+        else:
+            raise TelegramNetworkError
+    except Exception:
+        await send_album_tracks_individually(event, dl.tracks, titles, artists)
+
+
+async def send_album_media_group(event, tracks, titles, artists):
+    group_media = []
+    for i, track in enumerate(tracks):
+        tmp_song = open(track.song_path, "rb")
+        duration = get_audio_duration(tmp_song, track.song_path)
+        tmp_song.seek(0)
+        group_media.append(
+            InputMediaAudio(
+                media=BufferedInputFile(
+                    tmp_song.read(),
+                    filename=titles[i] + os.path.splitext(track.song_path)[1],
+                ),
+                title=titles[i],
+                performer=", ".join(artists[i]),
+                duration=duration,
+            )
+        )
+        tmp_song.close()
+    await event.answer_media_group(group_media, disable_notification=True)
+
+
+async def send_album_tracks_individually(event, tracks, titles, artists):
+    for i, track in enumerate(tracks):
+        tmp_song = open(track.song_path, "rb")
+        duration = get_audio_duration(tmp_song, track.song_path)
+        tmp_song.seek(0)
+        await event.answer_audio(
+            BufferedInputFile(
+                tmp_song.read(),
+                filename=titles[i] + os.path.splitext(track.song_path)[1],
+            ),
+            title=titles[i],
+            performer=", ".join(artists[i]),
+            duration=duration,
+            disable_notification=True,
+        )
+        tmp_song.close()
+
+
+def get_album_caption(album, release_date):
+    return (
+        '<b>Album: {}</b>\n{} - {}\n<a href="{}">' + __("album_link") + "</a>"
+    ).format(
+        album["title"],
+        album["artist"]["name"],
+        release_date,
+        album["link"],
+    )
 
 
 @deezer_router.message(F.text.regexp(r"^https?://(?:www\.)?deezer.page.link/.*$"))
@@ -506,34 +521,29 @@ async def get_shortlink(event: types.Message):
 @deezer_router.inline_query()
 async def inline_echo(inline_query: InlineQuery):
     items = []
-    print(inline_query)
     if inline_query.query:
         album = False
         if inline_query.query.startswith("artist "):
             album = True
             tmp_text = 'artist:"{}"'.format(inline_query.query.split("artist ")[1])
-            text = API_SEARCH_TRK % quote(str(tmp_text))
         elif inline_query.query.startswith("track "):
             tmp_text = 'track:"{}"'.format(inline_query.query.split("track ")[1])
-            text = API_SEARCH_TRK % quote(str(tmp_text))
         elif inline_query.query.startswith("album "):
             album = True
             tmp_text = 'album:"{}"'.format(inline_query.query.split("album ")[1])
-            text = API_SEARCH_TRK % quote(str(tmp_text))
         else:
-            text = API_SEARCH_TRK % quote(str(inline_query.query))
+            tmp_text = inline_query.query
+
+        text = API_SEARCH_TRK % quote(str(tmp_text))
 
         try:
-            print(text)
             r = requests.get(text).json()
-            print(r)
             all_ids = []
             for i in r["data"]:
                 tmp_url = i["album"]["tracklist"]
                 tmp_id = re.search("/album/(.*)/tracks", tmp_url).group(1)
                 if not (album and tmp_id in all_ids):
                     tmp_album = requests.get(API_ALBUM % quote(str(tmp_id))).json()
-                    print(tmp_album)
                     all_ids.append(tmp_id)
                     tmp_date = tmp_album["release_date"].split("-")
                     tmp_date = tmp_date[2] + "/" + tmp_date[1] + "/" + tmp_date[0]
@@ -565,10 +575,8 @@ async def inline_echo(inline_query: InlineQuery):
                             input_message_content=tmp_input,
                         )
                     )
-        except KeyError as e:
-            print(e)
+        except KeyError:
             pass
-        except AttributeError as e:
-            print(e)
+        except AttributeError:
             pass
     await bot.answer_inline_query(inline_query.id, results=items, cache_time=100)

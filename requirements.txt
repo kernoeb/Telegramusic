@@ -6,3 +6,4 @@ mutagen==1.47.0
 Pillow==10.4.0
 yt-dlp==2024.8.6
 aioshutil==1.5
+Unidecode~=1.3.8

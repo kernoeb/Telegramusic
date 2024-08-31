@@ -98,6 +98,29 @@ FORMAT=zip
 
 If the `zip` file is too big (more than 50MB), the bot will split the zip file into multiple parts.
 
+### Download URL
+
+You can also make the bot move a file to a specific directory and send you the download link.
+
+In the `token.env` file, add the following line :
+
+```
+FORMAT=zip
+COPY_FILES_PATH=/path/to/your/directory
+FILE_LINK_TEMPLATE=https://yourdomain.com/download/{0}
+```
+
+The `{0}` will be replaced by the file name.
+
+I recommend using a reverse proxy to serve the files, like Nginx or Caddy.
+
+If you use `Docker`, you can mount a volume to the container and set the `COPY_FILES_PATH` to `/files`, like this :
+
+```yaml
+volumes:
+  - /path/to/your/directory:/files
+```
+
 ### Allow FLAC format
 
 If you have Deezer premium, you can allow the bot to download FLAC files by adding the following line in the `token.env` file :
