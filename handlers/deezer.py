@@ -412,6 +412,7 @@ async def send_album_zip(event, album, cover, release_date, final_title, dl):
         ) as zipf:
             for track in dl.tracks:
                 zipf.write(track.song_path, track.song_name + track.file_format)
+            zipf.write(os.path.join(songs_parent_dir, "cover.jpg"), "cover.jpg")
 
         await event.answer_photo(
             BufferedInputFile(read_cover, filename="cover.jpg"),
