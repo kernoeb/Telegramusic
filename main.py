@@ -11,18 +11,21 @@ from aiogram.filters import Command
 from bot import bot, dp
 from handlers.deezer import deezer_router
 from handlers.youtube import youtube_router
+from utils import TMP_DIR
 
 if (
     sys.version_info.major != 3
     or sys.version_info.minor != 9
     or sys.version_info.micro != 18
 ):
-    print("Python 3.9.18 is required")
+    print(
+        "Python 3.9.18 is required, but you are using Python {}.{}.{}".format(
+            sys.version_info.major, sys.version_info.minor, sys.version_info.micro
+        )
+    )
     sys.exit(1)
 
 locale.setlocale(locale.LC_TIME, "")
-
-TMP_DIR = "tmp"
 
 try:
     os.mkdir(TMP_DIR)
@@ -30,7 +33,7 @@ except FileExistsError:
     pass
 
 try:
-    os.mkdir(Path("tmp", "yt"))
+    os.mkdir(Path(TMP_DIR, "yt"))
 except FileExistsError:
     pass
 

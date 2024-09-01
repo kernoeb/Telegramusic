@@ -4,7 +4,6 @@ import os
 import traceback
 from pathlib import Path
 
-import aioshutil
 import requests
 from PIL import Image
 from aiogram import F, types
@@ -14,13 +13,13 @@ from mutagen.mp3 import MP3
 from yt_dlp import YoutubeDL
 from aiogram import Router
 
-from utils import __, is_downloading, add_downloading, remove_downloading
+from utils import __, is_downloading, add_downloading, remove_downloading, TMP_DIR
 
 youtube_router = Router()
 
 COOKIES_PATH = os.environ.get("COOKIES_PATH")
 
-TMP_DIR = "tmp/yt"
+YT_TMP_DIR = Path(TMP_DIR, "yt")
 
 
 def crop_center(pil_img, crop_width, crop_height):
@@ -49,7 +48,7 @@ async def get_youtube_audio(event: types.Message):
         tmp_msg = await event.answer(__("downloading"))
         try:
             ydl_opts = {
-                "outtmpl": TMP_DIR + "/%(id)s.%(ext)s",
+                "outtmpl": str(YT_TMP_DIR) + "/%(id)s.%(ext)s",
                 "format": "bestaudio/best",
                 "postprocessors": [
                     {
@@ -112,7 +111,7 @@ async def get_youtube_audio(event: types.Message):
             # Delete user message
             await event.delete()
 
-            location = Path(TMP_DIR) / f"{dict_info['id']}.mp3"
+            location = Path(YT_TMP_DIR) / f"{dict_info['id']}.mp3"
 
             # TAG audio
             audio = MP3(location, ID3=ID3)
@@ -143,7 +142,7 @@ async def get_youtube_audio(event: types.Message):
                 disable_notification=True,
             )
             try:
-                await aioshutil.rmtree(os.path.dirname(location))
+                os.remove(location)
             except FileNotFoundError:
                 pass
         except Exception as e:

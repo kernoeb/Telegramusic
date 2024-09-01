@@ -5,6 +5,8 @@ LANGS_FILE = json.load(open("langs.json"))
 LANG = os.environ.get("BOT_LANG")
 DOWNLOADING_USERS = []
 
+TMP_DIR = "tmp"
+
 
 if LANG is not None:
     print("Lang : " + LANG)

@@ -27,7 +27,7 @@ from mutagen.mp3 import MP3
 from unidecode import unidecode
 
 from bot import bot
-from utils import __, is_downloading, add_downloading, remove_downloading
+from utils import __, is_downloading, add_downloading, remove_downloading, TMP_DIR
 
 deezloader_async = aioify(obj=deezloader.deezloader, name="deezloader_async")
 download = deezloader_async.DeeLogin(os.environ.get("DEEZER_TOKEN"))
@@ -56,8 +56,6 @@ PLAYLIST_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?playlist/(\d+)/?$"
 
 COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
-
-TMP_DIR = "tmp"
 
 
 async def download_track(url):
