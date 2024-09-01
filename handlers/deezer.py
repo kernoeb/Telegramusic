@@ -57,10 +57,10 @@ COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
 
-async def download_track(tmp):
+async def download_track(url):
     return await download.download_trackdee(
-        tmp,
-        output_dir="../tmp",
+        url,
+        output_dir="tmp",
         quality_download=DEFAULT_QUALITY,
         recursive_download=True,
         recursive_quality=True,
@@ -68,10 +68,10 @@ async def download_track(tmp):
     )
 
 
-async def download_album(tmp):
+async def download_album(url):
     return await download.download_albumdee(
-        tmp,
-        output_dir="../tmp",
+        url,
+        output_dir="tmp",
         quality_download=DEFAULT_QUALITY,
         recursive_download=True,
         recursive_quality=True,
