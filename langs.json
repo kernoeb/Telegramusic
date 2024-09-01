@@ -5,7 +5,9 @@
     "es": "Descargando...",
     "pt": "Está fazendo o download...",
     "in": "Anda sedang download...",
-    "dt": "Es wird heruntergeladen..."
+    "de": "Es wird heruntergeladen...",
+    "zh": "下载中...",
+    "ar": "جارٍ التنزيل..."
   },
   "track_link": {
     "fr": "Lien du track",
@@ -13,7 +15,9 @@
     "es": "Enlace de la canción",
     "pt": "Link da música",
     "in": "Tautan musik",
-    "dt": "Musik-Link"
+    "de": "Musik-Link",
+    "zh": "歌曲链接",
+    "ar": "رابط المسار"
   },
   "album_link": {
     "fr": "Lien de l'album",
@@ -21,7 +25,9 @@
     "es": "Link del álbum",
     "pt": "Link do Álbum",
     "in": "Tautan Album",
-    "dt": "Album-Link"
+    "de": "Album-Link",
+    "zh": "专辑链接",
+    "ar": "رابط الألبوم"
   },
   "playlist_link": {
     "fr": "Lien de la playlist",
@@ -29,7 +35,9 @@
     "es": "Link de la playlist",
     "pt": "Link da playlist",
     "in": "Tautan playlist",
-    "dt": "Playlist-Link"
+    "de": "Playlist-Link",
+    "zh": "播放列表链接",
+    "ar": "رابط القائمة"
   },
   "download_error": {
     "fr": "Échec du téléchargement.",
@@ -37,7 +45,9 @@
     "es": "Descarga fallida",
     "pt": "Aconteceu um erro durante o download",
     "in": "Terjadi kesalahan selama download",
-    "dt": "Beim Herunterladen ist ein Fehler aufgetreten"
+    "de": "Beim Herunterladen ist ein Fehler aufgetreten",
+    "zh": "下载失败。",
+    "ar": "فشل التنزيل."
   },
   "running_download": {
     "fr": "Un téléchargement est déjà en cours !",
@@ -45,6 +55,8 @@
     "es": "Una descarga ya está en proceso",
     "pt": "Um download já está em andamento!",
     "in": "Pengunduhan sedang berlangsung!",
-    "dt": "Ein Download ist bereits in Bearbeitung!"
+    "de": "Ein Download ist bereits in Bearbeitung!",
+    "zh": "已有下载正在进行中！",
+    "ar": "عملية تنزيل جارية بالفعل!"
   }
 }
