@@ -2,6 +2,7 @@ import asyncio
 import io
 import os
 import traceback
+from pathlib import Path
 
 import aioshutil
 import requests
@@ -18,6 +19,8 @@ from utils import __, is_downloading, add_downloading, remove_downloading
 youtube_router = Router()
 
 COOKIES_PATH = os.environ.get("COOKIES_PATH")
+
+TMP_DIR = "tmp/yt"
 
 
 def crop_center(pil_img, crop_width, crop_height):
@@ -46,7 +49,7 @@ async def get_youtube_audio(event: types.Message):
         tmp_msg = await event.answer(__("downloading"))
         try:
             ydl_opts = {
-                "outtmpl": "tmp/yt/%(id)s.%(ext)s",
+                "outtmpl": TMP_DIR + "/%(id)s.%(ext)s",
                 "format": "bestaudio/best",
                 "postprocessors": [
                     {
@@ -109,7 +112,7 @@ async def get_youtube_audio(event: types.Message):
             # Delete user message
             await event.delete()
 
-            location = "tmp/yt/" + dict_info["id"] + ".mp3"
+            location = Path(TMP_DIR) / f"{dict_info['id']}.mp3"
 
             # TAG audio
             audio = MP3(location, ID3=ID3)

@@ -4,6 +4,7 @@ import math
 import os
 import re
 import traceback
+from pathlib import Path
 from urllib.parse import quote
 from zipfile import ZipFile, ZIP_DEFLATED
 
@@ -56,11 +57,13 @@ PLAYLIST_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?playlist/(\d+)/?$"
 COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
+TMP_DIR = "tmp"
+
 
 async def download_track(url):
     return await download.download_trackdee(
         url,
-        output_dir="tmp",
+        output_dir=TMP_DIR,
         quality_download=DEFAULT_QUALITY,
         recursive_download=True,
         recursive_quality=True,
@@ -71,7 +74,7 @@ async def download_track(url):
 async def download_album(url):
     return await download.download_albumdee(
         url,
-        output_dir="tmp",
+        output_dir=TMP_DIR,
         quality_download=DEFAULT_QUALITY,
         recursive_download=True,
         recursive_quality=True,
@@ -90,10 +93,11 @@ def add_file_to_zip(zipf, file, track_file_mapping):
 
 def create_single_zip(files, track_file_mapping, output_name):
     """Create a single zip file."""
-    with ZipFile(f"{output_name}.zip", "w", ZIP_DEFLATED) as zipf:
+    zip_name = f"{output_name}.zip"
+    with ZipFile(zip_name, "w", ZIP_DEFLATED) as zipf:
         for file in files:
             add_file_to_zip(zipf, file, track_file_mapping)
-    return [f"{output_name}.zip"]
+    return [zip_name]
 
 
 def create_multi_part_zip(source_dir, output_name, dl_tracks, max_size_mb=45):
@@ -230,7 +234,7 @@ async def send_zip(event, json_data, cover, release_date, final_title, dl):
         url_safe_zip_name = re.sub(r"[^.a-zA-Z0-9()_-]", "_", zip_name)
 
         with ZipFile(
-            f"{COPY_FILES_PATH}/{url_safe_zip_name}", "w", ZIP_DEFLATED
+            Path(COPY_FILES_PATH) / url_safe_zip_name, "w", ZIP_DEFLATED
         ) as zipf:
             zipf.write(dl.song_path, dl.song_name + dl.file_format)
             zipf.write(os.path.join(songs_parent_dir, "cover.jpg"), "cover.jpg")
@@ -243,17 +247,21 @@ async def send_zip(event, json_data, cover, release_date, final_title, dl):
 
         await event.answer(FILE_LINK_TEMPLATE.format(url_safe_zip_name))
     else:
-        await aioshutil.make_archive("tmp/" + final_title, "zip", songs_parent_dir)
+        await aioshutil.make_archive(
+            Path(TMP_DIR) / final_title, "zip", songs_parent_dir
+        )
 
         await event.answer_document(
-            FSInputFile("tmp/" + final_title + ".zip"),
+            FSInputFile(Path(TMP_DIR) / f"{final_title}.zip"),
             caption=get_caption(json_data, release_date),
             parse_mode="HTML",
         )
 
     await event.delete()
-    if os.path.exists("tmp/" + final_title + ".zip"):
-        os.remove("tmp/" + final_title + ".zip")
+    # Check if the file exists and remove it if it does
+    zip_path = Path(TMP_DIR) / f"{final_title}.zip"
+    if zip_path.exists():
+        zip_path.unlink()
 
 
 async def send_audio(event, json_data, cover, artists, release_date, dl):
@@ -330,8 +338,9 @@ async def get_track(event: types.Message, real_link=None):
             )
             await tmp_msg.delete()
             await aioshutil.rmtree(os.path.dirname(dl.song_path))
-            if os.path.exists("tmp/" + final_title + ".zip"):
-                os.remove("tmp/" + final_title + ".zip")
+            zip_path = Path(TMP_DIR) / f"{final_title}.zip"
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
         except Exception as e:
             await tmp_msg.delete()
             await event.answer(__("download_error") + " " + str(e))
@@ -408,7 +417,7 @@ async def send_album_zip(event, album, cover, release_date, final_title, dl):
         url_safe_zip_name = re.sub(r"[^.a-zA-Z0-9()_-]", "_", zip_name)
 
         with ZipFile(
-            f"{COPY_FILES_PATH}/{url_safe_zip_name}", "w", ZIP_DEFLATED
+            Path(COPY_FILES_PATH) / url_safe_zip_name, "w", ZIP_DEFLATED
         ) as zipf:
             for track in dl.tracks:
                 zipf.write(track.song_path, track.song_name + track.file_format)
@@ -423,7 +432,7 @@ async def send_album_zip(event, album, cover, release_date, final_title, dl):
         await event.answer(FILE_LINK_TEMPLATE.format(url_safe_zip_name))
     else:
         zip_files = create_multi_part_zip(
-            songs_parent_dir, "tmp/" + final_title, dl.tracks
+            songs_parent_dir, Path(TMP_DIR) / final_title, dl.tracks
         )
         for zip_file in zip_files:
             await event.answer_document(
