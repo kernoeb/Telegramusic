@@ -3,6 +3,7 @@ import locale
 import logging
 import os
 import sys
+from pathlib import Path
 
 from aiogram import types
 from aiogram.filters import Command
@@ -21,13 +22,15 @@ if (
 
 locale.setlocale(locale.LC_TIME, "")
 
+TMP_DIR = "tmp"
+
 try:
-    os.mkdir("tmp")
+    os.mkdir(TMP_DIR)
 except FileExistsError:
     pass
 
 try:
-    os.mkdir("tmp/yt/")
+    os.mkdir(Path("tmp", "yt"))
 except FileExistsError:
     pass
 

@@ -101,6 +101,7 @@ def create_single_zip(files, track_file_mapping, output_name):
 
 
 def create_multi_part_zip(source_dir, output_name, dl_tracks, max_size_mb=45):
+    """Create a multi-part zip file."""
     max_size = max_size_mb * 1024 * 1024  # Convert to bytes
     all_files = set(os.path.join(source_dir, f) for f in os.listdir(source_dir))
 
@@ -172,6 +173,7 @@ def create_multi_part_zip(source_dir, output_name, dl_tracks, max_size_mb=45):
 
 
 async def get_track_info(track_id):
+    """Get track information from Deezer API."""
     track_json = requests.get(API_TRACK % quote(str(track_id))).json()
     cover_url = (
         track_json["album"]["cover_xl"]
@@ -189,6 +191,7 @@ async def get_track_info(track_id):
 
 
 async def get_album_info(album_id):
+    """Get album information from Deezer API."""
     album = requests.get(API_ALBUM % quote(str(album_id))).json()
     tracks = requests.get(API_ALBUM % quote(str(album_id)) + "/tracks?limit=100").json()
     cover_url = (
@@ -216,6 +219,7 @@ async def get_album_info(album_id):
 
 
 async def send_track(event, track_json, cover, artists, release_date, final_title, dl):
+    """Send the track to the user."""
     if os.environ.get("FORMAT") == "zip":
         await send_zip(event, track_json, cover, release_date, final_title, dl)
     else:
@@ -223,6 +227,7 @@ async def send_track(event, track_json, cover, artists, release_date, final_titl
 
 
 async def send_zip(event, json_data, cover, release_date, final_title, dl):
+    """Send the track as a zip file."""
     songs_parent_dir = os.path.dirname(dl.song_path)
     read_cover = cover.read()
     with open(os.path.join(songs_parent_dir, "cover.jpg"), "wb") as cover_file:
@@ -265,6 +270,7 @@ async def send_zip(event, json_data, cover, release_date, final_title, dl):
 
 
 async def send_audio(event, json_data, cover, artists, release_date, dl):
+    """Send the track as an audio file."""
     await event.answer_photo(
         BufferedInputFile(cover.read(), filename="cover.jpg"),
         caption=get_caption(json_data, release_date),
@@ -286,7 +292,49 @@ async def send_audio(event, json_data, cover, artists, release_date, dl):
     tmp_song.close()
 
 
+async def send_album_media_group(event, tracks, titles, artists):
+    """Send the album as a media group."""
+    group_media = []
+    for i, track in enumerate(tracks):
+        tmp_song = open(track.song_path, "rb")
+        duration = get_audio_duration(tmp_song, track.song_path)
+        tmp_song.seek(0)
+        group_media.append(
+            InputMediaAudio(
+                media=BufferedInputFile(
+                    tmp_song.read(),
+                    filename=titles[i] + os.path.splitext(track.song_path)[1],
+                ),
+                title=titles[i],
+                performer=", ".join(artists[i]),
+                duration=duration,
+            )
+        )
+        tmp_song.close()
+    await event.answer_media_group(group_media, disable_notification=True)
+
+
+async def send_album_tracks_individually(event, tracks, titles, artists):
+    """Send the album tracks individually."""
+    for i, track in enumerate(tracks):
+        tmp_song = open(track.song_path, "rb")
+        duration = get_audio_duration(tmp_song, track.song_path)
+        tmp_song.seek(0)
+        await event.answer_audio(
+            BufferedInputFile(
+                tmp_song.read(),
+                filename=titles[i] + os.path.splitext(track.song_path)[1],
+            ),
+            title=titles[i],
+            performer=", ".join(artists[i]),
+            duration=duration,
+            disable_notification=True,
+        )
+        tmp_song.close()
+
+
 def get_caption(json_data, release_date):
+    """Get the caption for the track."""
     return (
         "<b>Track: {}</b>"
         '\n{} - {}\n<a href="{}">'
@@ -303,7 +351,20 @@ def get_caption(json_data, release_date):
     )
 
 
+def get_album_caption(album, release_date):
+    """Get the caption for the album."""
+    return (
+        '<b>Album: {}</b>\n{} - {}\n<a href="{}">' + __("album_link") + "</a>"
+    ).format(
+        album["title"],
+        album["artist"]["name"],
+        release_date,
+        album["link"],
+    )
+
+
 def get_audio_duration(file, path):
+    """Get the duration of the audio file."""
     extension = os.path.splitext(path)[1]
     if extension == ".mp3":
         return int(MP3(file).info.length)
@@ -464,56 +525,6 @@ async def send_album_audio(event, album, cover, titles, artists, release_date, d
             raise TelegramNetworkError
     except Exception:
         await send_album_tracks_individually(event, dl.tracks, titles, artists)
-
-
-async def send_album_media_group(event, tracks, titles, artists):
-    group_media = []
-    for i, track in enumerate(tracks):
-        tmp_song = open(track.song_path, "rb")
-        duration = get_audio_duration(tmp_song, track.song_path)
-        tmp_song.seek(0)
-        group_media.append(
-            InputMediaAudio(
-                media=BufferedInputFile(
-                    tmp_song.read(),
-                    filename=titles[i] + os.path.splitext(track.song_path)[1],
-                ),
-                title=titles[i],
-                performer=", ".join(artists[i]),
-                duration=duration,
-            )
-        )
-        tmp_song.close()
-    await event.answer_media_group(group_media, disable_notification=True)
-
-
-async def send_album_tracks_individually(event, tracks, titles, artists):
-    for i, track in enumerate(tracks):
-        tmp_song = open(track.song_path, "rb")
-        duration = get_audio_duration(tmp_song, track.song_path)
-        tmp_song.seek(0)
-        await event.answer_audio(
-            BufferedInputFile(
-                tmp_song.read(),
-                filename=titles[i] + os.path.splitext(track.song_path)[1],
-            ),
-            title=titles[i],
-            performer=", ".join(artists[i]),
-            duration=duration,
-            disable_notification=True,
-        )
-        tmp_song.close()
-
-
-def get_album_caption(album, release_date):
-    return (
-        '<b>Album: {}</b>\n{} - {}\n<a href="{}">' + __("album_link") + "</a>"
-    ).format(
-        album["title"],
-        album["artist"]["name"],
-        release_date,
-        album["link"],
-    )
 
 
 @deezer_router.message(F.text.regexp(r"^https?://(?:www\.)?deezer.page.link/.*$"))
