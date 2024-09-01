@@ -138,3 +138,19 @@ Add a `cookies.txt` in `./local_resources`.
 To generate this file, please see : https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp.
 
 You don't need to restart the bot, it will automatically reload the cookies when downloading a YouTube video.
+
+### Example configuration
+
+```dotenv
+# Global configuration
+BOT_LANG=en
+
+# Tokens
+DEEZER_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TELEGRAM_TOKEN=1234567890:ABCDEFghijklmnopqrstuvwxyz012345678
+
+# Specific configuration
+COPY_FILES_PATH=/files
+FILE_LINK_TEMPLATE=https://example.com/dl/{0}
+FORMAT=zip
+```
