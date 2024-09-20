@@ -401,6 +401,7 @@ async def get_track(event: types.Message, real_link=None):
             if os.path.exists(zip_path):
                 os.remove(zip_path)
         except Exception as e:
+            print(e)
             await tmp_msg.delete()
             await event.answer(__("download_error") + " " + str(e))
         finally:
@@ -449,6 +450,7 @@ async def get_album(event: types.Message, real_link=None):
             await tmp_msg.delete()
             await aioshutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
         except Exception as e:
+            print(e)
             traceback.print_exc()
             await tmp_msg.delete()
             await event.answer(__("download_error") + " " + str(e))
@@ -534,6 +536,7 @@ async def get_shortlink(event: types.Message):
     elif re.match(ALBUM_REGEX, real_link):
         await get_album(event, real_link)
     else:
+        print("Unknown link: " + real_link)
         await event.answer(__("download_error"))
 
 
