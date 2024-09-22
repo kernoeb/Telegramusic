@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import quote
 from zipfile import ZipFile, ZIP_DEFLATED
 
+import aiohttp
 import aioshutil
 import deezloader.deezloader
 import requests
@@ -562,6 +563,7 @@ async def get_shortlink(event: types.Message):
 @deezer_router.inline_query()
 async def inline_echo(inline_query: InlineQuery):
     items = []
+
     if inline_query.query:
         album = False
         if inline_query.query.startswith("artist "):
@@ -578,46 +580,66 @@ async def inline_echo(inline_query: InlineQuery):
         text = API_SEARCH_TRK % quote(str(tmp_text))
 
         try:
-            r = requests.get(text).json()
-            all_ids = []
-            for i in r["data"]:
-                tmp_url = i["album"]["tracklist"]
-                tmp_id = re.search("/album/(.*)/tracks", tmp_url).group(1)
-                if not (album and tmp_id in all_ids):
-                    tmp_album = requests.get(API_ALBUM % quote(str(tmp_id))).json()
-                    all_ids.append(tmp_id)
-                    tmp_date = tmp_album["release_date"].split("-")
-                    tmp_date = tmp_date[2] + "/" + tmp_date[1] + "/" + tmp_date[0]
-                    if album:
-                        title = i["album"]["title"]
-                        tmp_input = InputTextMessageContent(
-                            message_text=DEEZER_URL + "/album/%s" % quote(str(tmp_id))
-                        )
-                        try:
-                            nb = str(len(tmp_album["tracks"]["data"])) + " audio(s)"
-                        except KeyError:
-                            nb = ""
-                        show_txt_album = " | " + nb + " (album)"
-                    else:
-                        show_txt_album = ""
-                        tmp_input = InputTextMessageContent(message_text=i["link"])
-                        title = i["title"]
+            async with aiohttp.ClientSession() as session:
+                async with session.get(text) as resp:
+                    r = await resp.json()
 
-                    result_id = str(i["id"])
-                    items.append(
-                        InlineQueryResultArticle(
-                            id=result_id,
-                            title=title,
-                            description=i["artist"]["name"]
-                            + " | "
-                            + tmp_date
-                            + show_txt_album,
-                            thumb_url=i["album"]["cover_small"],
-                            input_message_content=tmp_input,
-                        )
-                    )
+                all_ids = []
+                tasks = []
+
+                for i in r["data"]:
+                    tmp_url = i["album"]["tracklist"]
+                    tmp_id = re.search("/album/(.*)/tracks", tmp_url).group(1)
+                    if not (album and tmp_id in all_ids):
+                        # Append tasks to the list in batches of 10
+                        tasks.append(fetch_album_data(session, tmp_id, i, album))
+                        if len(tasks) >= 10:
+                            batch_results = await asyncio.gather(*tasks)
+                            items.extend(batch_results)
+                            tasks.clear()  # Clear tasks after each batch
+
+                # Handle any remaining tasks (if less than 10)
+                if tasks:
+                    batch_results = await asyncio.gather(*tasks)
+                    items.extend(batch_results)
+
         except KeyError:
             pass
         except AttributeError:
             pass
-    await bot.answer_inline_query(inline_query.id, results=items, cache_time=100)
+
+    await bot.answer_inline_query(inline_query.id, results=items, cache_time=300)
+
+
+async def fetch_album_data(session, tmp_id, track_data, album):
+    async with session.get(API_ALBUM % quote(str(tmp_id))) as album_resp:
+        tmp_album = await album_resp.json()
+
+    tmp_date = tmp_album["release_date"].split("-")
+    tmp_date = tmp_date[2] + "/" + tmp_date[1] + "/" + tmp_date[0]
+
+    if album:
+        title = track_data["album"]["title"]
+        tmp_input = InputTextMessageContent(
+            message_text=DEEZER_URL + "/album/%s" % quote(str(tmp_id))
+        )
+        try:
+            nb = str(len(tmp_album["tracks"]["data"])) + " audio(s)"
+        except KeyError:
+            nb = ""
+        show_txt_album = " | " + nb + " (album)"
+    else:
+        show_txt_album = ""
+        tmp_input = InputTextMessageContent(message_text=track_data["link"])
+        title = track_data["title"]
+
+    result_id = str(track_data["id"])
+    item = InlineQueryResultArticle(
+        id=result_id,
+        title=title,
+        description=track_data["artist"]["name"] + " | " + tmp_date + show_txt_album,
+        thumb_url=track_data["album"]["cover_small"],
+        input_message_content=tmp_input,
+    )
+
+    return item
