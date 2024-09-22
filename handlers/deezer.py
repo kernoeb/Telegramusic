@@ -58,29 +58,48 @@ COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
 
-async def download_track(url):
-    return await download.download_trackdee(
-        url,
-        output_dir=TMP_DIR,
-        quality_download=DEFAULT_QUALITY,
-        recursive_download=True,
-        recursive_quality=True,
-        not_interface=False,
-    )
+async def download_track(url, retries=2):
+    for attempt in range(retries):
+        try:
+            return await download.download_trackdee(
+                url,
+                output_dir=TMP_DIR,
+                quality_download=DEFAULT_QUALITY,
+                recursive_download=True,
+                recursive_quality=True,
+                not_interface=False,
+            )
+        except Exception as e:
+            if attempt < retries - 1:
+                print(
+                    f"Error occurred while downloading track. Retrying... ({attempt + 1}/{retries})"
+                )
+                await asyncio.sleep(1)  # Optional: Wait a bit before retrying
+            else:
+                print(f"Failed to download track after {retries} attempts. Error: {e}")
+                raise
 
 
-async def download_album(url):
-    return await download.download_albumdee(
-        url,
-        output_dir=TMP_DIR,
-        quality_download=DEFAULT_QUALITY,
-        recursive_download=True,
-        recursive_quality=True,
-        not_interface=False,
-    )
-
-
-import os
+async def download_album(url, retries=2):
+    for attempt in range(retries):
+        try:
+            return await download.download_albumdee(
+                url,
+                output_dir=TMP_DIR,
+                quality_download=DEFAULT_QUALITY,
+                recursive_download=True,
+                recursive_quality=True,
+                not_interface=False,
+            )
+        except Exception as e:
+            if attempt < retries - 1:
+                print(
+                    f"Error occurred while downloading album. Retrying... ({attempt + 1}/{retries})"
+                )
+                await asyncio.sleep(1)  # Optional: Wait a bit before retrying
+            else:
+                print(f"Failed to download album after {retries} attempts. Error: {e}")
+                raise
 
 
 def add_file_to_zip(zipf, file, track_file_mapping):
