@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY patches/deezer_settings.py ./patches/deezer_settings.py
+COPY patches/*.py ./patches/*.py
 COPY handlers ./handlers
 COPY langs.json ./
 COPY main.py ./
