@@ -9,8 +9,8 @@ WORKDIR /usr/src/app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY patches/*.py ./patches/*.py
-COPY handlers ./handlers
+COPY patches patches
+COPY handlers handlers
 COPY langs.json ./
 COPY main.py ./
 COPY utils.py ./
