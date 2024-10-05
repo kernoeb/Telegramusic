@@ -13,16 +13,16 @@
 </p>
 
 ## Disclaimer
+
 :warning: For educational purposes only (or for free music)    
 Please don't use this for illegal stuff.  
 It's **against Deezer's terms of service**.
 
-
 ## Information
 
 You should probably use Docker way to install the bot, or follow the steps listed in the Dockerfile.  
-As indicated in the Dockerfile there's a temporary patch to avoid the "FLAC issue" from the deezer download library.
-
+As indicated in the Dockerfile there's a temporary patch to avoid the "FLAC issue" from the deezer download library,
+and another one to allow downloading albums with more than 25 tracks.
 
 ## Translations
 
@@ -30,10 +30,10 @@ Your native language is not in the `langs.json` file ? Just make a pull request 
 
 ## Usage
 
-- Get an `arl` cookie on Deezer for `DEEZER_TOKEN` (see [this repo](https://github.com/nathom/streamrip/wiki/Finding-Your-Deezer-ARL-Cookie))
-- Create a bot on Telegram and grab a token with [Bot Father](https://t.me/botfather) (`TELEGRAM_TOKEN`) 
+- Get an `arl` cookie on Deezer for `DEEZER_TOKEN` (
+  see [this repo](https://github.com/nathom/streamrip/wiki/Finding-Your-Deezer-ARL-Cookie))
+- Create a bot on Telegram and grab a token with [Bot Father](https://t.me/botfather) (`TELEGRAM_TOKEN`)
 - Activate `Inline Mode` on BotFather for the bot you just created
-
 
 ----
 
@@ -45,9 +45,7 @@ Search for music in `inline mode` :
 
 ![image](https://user-images.githubusercontent.com/24623168/141982877-ca7589d4-fe47-4b5a-b751-6d945c21f944.png)
 
-
 ![image](https://user-images.githubusercontent.com/24623168/141983477-b7692d78-134a-4176-98ba-d6388ac4b80b.png)
-
 
 or send a Deezer / YouTube link
 
@@ -59,7 +57,8 @@ or send a Deezer / YouTube link
 
 #### Prerequisites
 
-- Docker ([Linux installation](https://docs.docker.com/engine/install/ubuntu/) and [Linux post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/))
+- Docker ([Linux installation](https://docs.docker.com/engine/install/ubuntu/)
+  and [Linux post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/))
 - Docker compose (should be included in the Docker installation)
 
 Create a `token.env` file with the following content, replacing the values with your own tokens :
@@ -88,7 +87,8 @@ BOT_LANG=fr
 
 ### Compressed files (zip)
 
-You can send a zip file with multiple tracks inside, the bot will send you a zip file with all the tracks downloaded and the cover.
+You can send a zip file with multiple tracks inside, the bot will send you a zip file with all the tracks downloaded and
+the cover.
 
 In the `token.env` file, add the following line :
 
@@ -123,7 +123,8 @@ volumes:
 
 ### Allow FLAC format
 
-If you have Deezer premium, you can allow the bot to download FLAC files by adding the following line in the `token.env` file :
+If you have Deezer premium, you can allow the bot to download FLAC files by adding the following line in the `token.env`
+file :
 
 ```
 ENABLE_FLAC=1
