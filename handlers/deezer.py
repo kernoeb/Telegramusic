@@ -59,7 +59,7 @@ COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
 
-async def download_track(url, retries=2):
+async def download_track(url, retries=5):
     for attempt in range(retries):
         try:
             return await download.download_trackdee(
@@ -72,16 +72,17 @@ async def download_track(url, retries=2):
             )
         except Exception as e:
             if attempt < retries - 1:
+                sleep_time = 1 * (attempt + 1)
                 print(
-                    f"Error occurred while downloading track. Retrying... ({attempt + 1}/{retries})"
+                    f"Error occurred while downloading track. Retrying... ({attempt + 1}/{retries}) (Sleeping for {sleep_time} seconds)"
                 )
-                await asyncio.sleep(1)  # Optional: Wait a bit before retrying
+                await asyncio.sleep(1 * (attempt + 1))
             else:
                 print(f"Failed to download track after {retries} attempts. Error: {e}")
                 raise
 
 
-async def download_album(url, retries=2):
+async def download_album(url, retries=5):
     for attempt in range(retries):
         try:
             return await download.download_albumdee(
@@ -94,10 +95,11 @@ async def download_album(url, retries=2):
             )
         except Exception as e:
             if attempt < retries - 1:
+                sleep_time = 1 * (attempt + 1)
                 print(
-                    f"Error occurred while downloading album. Retrying... ({attempt + 1}/{retries})"
+                    f"Error occurred while downloading album. Retrying... ({attempt + 1}/{retries}) (Sleeping for {sleep_time} seconds)"
                 )
-                await asyncio.sleep(1)  # Optional: Wait a bit before retrying
+                await asyncio.sleep(1 * (attempt + 1))
             else:
                 print(f"Failed to download album after {retries} attempts. Error: {e}")
                 raise
