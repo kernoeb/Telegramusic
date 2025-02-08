@@ -59,6 +59,15 @@ COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
 
+def clean_filename(filename):
+    # replace ".." at the beginning of the filename
+    filename = re.sub(r"^\.\.", "__", filename)
+    # replace "." at the beginning of the filename
+    filename = re.sub(r"^\.", "_", filename)
+    # replace characters that are not allowed in filenames
+    return re.sub(r'[\\/*?:"<>|]', "_", filename)
+
+
 async def download_track(url, retries=5):
     for attempt in range(retries):
         try:
@@ -107,8 +116,8 @@ async def download_album(url, retries=5):
 
 def add_file_to_zip(zipf, file, track_file_mapping):
     """Helper function to add a file to the zip."""
-    zip_name = track_file_mapping.get(file, os.path.basename(file))
-    zipf.write(file, zip_name)
+    final_name = track_file_mapping.get(file, os.path.basename(file))
+    zipf.write(file, final_name)
 
 
 def create_single_zip(files, track_file_mapping, output_name):
@@ -140,7 +149,9 @@ def create_multi_part_zip(source_dir, output_name, dl_tracks, max_size_mb=45):
         if track_file in all_files:
             files.append(track_file)
             all_files.remove(track_file)
-            track_file_mapping[track_file] = f"{track.song_name}{track.file_format}"
+            track_file_mapping[track_file] = (
+                f"{clean_filename(track.song_name)}{track.file_format}"
+            )
 
     # Add any remaining files
     files.extend(sorted(all_files))
@@ -261,7 +272,7 @@ async def send_zip(event, json_data, cover, release_date, final_title, dl):
         with ZipFile(
             Path(COPY_FILES_PATH) / url_safe_zip_name, "w", ZIP_DEFLATED
         ) as zipf:
-            zipf.write(dl.song_path, dl.song_name + dl.file_format)
+            zipf.write(dl.song_path, clean_filename(dl.song_name) + dl.file_format)
             zipf.write(os.path.join(songs_parent_dir, "cover.jpg"), "cover.jpg")
 
         await event.answer_photo(
@@ -503,7 +514,9 @@ async def send_album_zip(event, album, cover, release_date, final_title, dl):
             Path(COPY_FILES_PATH) / url_safe_zip_name, "w", ZIP_DEFLATED
         ) as zipf:
             for track in dl.tracks:
-                zipf.write(track.song_path, track.song_name + track.file_format)
+                zipf.write(
+                    track.song_path, clean_filename(track.song_name) + track.file_format
+                )
             zipf.write(os.path.join(songs_parent_dir, "cover.jpg"), "cover.jpg")
 
         await event.answer_photo(
