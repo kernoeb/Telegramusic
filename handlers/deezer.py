@@ -562,7 +562,9 @@ async def send_album_audio(event, album, cover, titles, artists, release_date, d
         await send_album_tracks_individually(event, dl.tracks, titles, artists)
 
 
-@deezer_router.message(F.text.regexp(r"^https?://(?:www\.)?deezer.page.link/.*$"))
+@deezer_router.message(
+    F.text.regexp(r"^https?://(?:www\.)?(?:deezer|dzr)\.page\.link/.*$")
+)
 async def get_shortlink(event: types.Message):
     r = requests.get(event.text)
     real_link = r.url.split("?")[0]
