@@ -406,6 +406,7 @@ def get_audio_duration(file, path):
 
 @deezer_router.message(F.text.regexp(TRACK_REGEX))
 async def get_track(event: types.Message, real_link=None):
+    print(event.from_user, event.text)
     copy_text = real_link or event.text
     while not copy_text.startswith("h"):
         copy_text = copy_text[1:]
@@ -451,6 +452,7 @@ async def get_track(event: types.Message, real_link=None):
 
 @deezer_router.message(F.text.regexp(ALBUM_REGEX))
 async def get_album(event: types.Message, real_link=None):
+    print(event.from_user, event.text)
     copy_text = real_link or event.text
     while not copy_text.startswith("h"):
         copy_text = copy_text[1:]
