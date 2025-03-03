@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 
+import aiogram
 from aiogram import types
 from aiogram.filters import Command
 
@@ -24,6 +25,10 @@ if (
         )
     )
     sys.exit(1)
+
+# Print the version of all modules
+print("Python version: ", sys.version)
+print("aiogram version: ", aiogram.__version__)
 
 locale.setlocale(locale.LC_TIME, "")
 

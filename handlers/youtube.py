@@ -5,6 +5,7 @@ import traceback
 from pathlib import Path
 
 import requests
+import yt_dlp
 from PIL import Image
 from aiogram import F, types
 from aiogram.types import BufferedInputFile, FSInputFile
@@ -14,6 +15,8 @@ from yt_dlp import YoutubeDL
 from aiogram import Router
 
 from utils import __, is_downloading, add_downloading, remove_downloading, TMP_DIR
+
+print("yt-dlp version: ", yt_dlp.version.__version__)
 
 youtube_router = Router()
 
