@@ -43,6 +43,9 @@ class TelegramNetworkError(Exception):
 DEFAULT_QUALITY = "FLAC" if os.environ.get("ENABLE_FLAC") == "1" else "MP3_320"
 print("Default quality: " + DEFAULT_QUALITY)
 
+MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 5))
+print("Max retries: " + str(MAX_RETRIES))
+
 # Constants
 DEEZER_URL = "https://deezer.com"
 API_URL = "https://api.deezer.com"
@@ -91,7 +94,7 @@ async def download_track(url, retries=5):
                 raise
 
 
-async def download_album(url, retries=5):
+async def download_album(url, retries=MAX_RETRIES):
     for attempt in range(retries):
         try:
             return await download.download_albumdee(
