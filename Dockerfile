@@ -22,9 +22,9 @@ ENV ENABLE_FLAC=$ENABLE_FLAC
 RUN echo "> ENABLE_FLAC : $ENABLE_FLAC"
 
 RUN if [ "$ENABLE_FLAC" = "0" ]; then \
-    echo "FLAC : disabled" && \
+      echo "FLAC : disabled"; \
     else \
-    echo "FLAC : enabled" && \
+      echo "FLAC : enabled"; \
     fi
 
 CMD [ "python", "./main.py" ]
