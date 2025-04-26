@@ -23,11 +23,10 @@ from aiogram.types import (
     InputTextMessageContent,
     InlineQueryResultArticle,
 )
-from mutagen.flac import FLAC
-from mutagen.mp3 import MP3
 from unidecode import unidecode
 
 from bot import bot
+
 from utils import (
     __,
     is_downloading,
@@ -35,6 +34,7 @@ from utils import (
     remove_downloading,
     TMP_DIR,
 )
+from dl_utils.deezer_utils import clean_filename, get_audio_duration
 from dl_utils.deezer_download import (
     init_deezer_session,
     get_song_infos_from_deezer_website,
@@ -72,23 +72,6 @@ PLAYLIST_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?playlist/(\d+)/?$"  
 
 COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
-
-
-def clean_filename(filename):
-    """
-    Cleans a string to be suitable for use as a filename or directory name.
-    Removes or replaces potentially problematic characters.
-    """
-    # Replace potentially problematic characters with underscores
-    cleaned = re.sub(r'[\\/*?:"<>|]', "_", filename)
-    # Remove leading/trailing whitespace and dots
-    cleaned = cleaned.strip(" .")
-    # Replace consecutive underscores with a single underscore
-    cleaned = re.sub(r"_+", "_", cleaned)
-    # Ensure the filename is not empty after cleaning
-    if not cleaned:
-        return "_"
-    return cleaned
 
 
 async def download_track(track_id, retries=MAX_RETRIES):
@@ -495,26 +478,6 @@ def get_album_caption(metadata):
         "{artist} - {release_date}\n"
         '<a href="{album_link}">' + __("album_link") + "</a>"
     ).format(**metadata)
-
-
-def get_audio_duration(file_path):
-    """Get the duration of the audio file."""
-    try:
-        extension = os.path.splitext(file_path)[1].lower()
-        if extension == ".mp3":
-            audio = MP3(file_path)
-            return int(audio.info.length)
-        elif extension == ".flac":
-            audio = FLAC(file_path)
-            return int(audio.info.length)
-        else:
-            print(
-                f"Warning: Unsupported audio format for duration calculation: {extension}"
-            )
-            return 0  # Unknown duration
-    except Exception as e:
-        print(f"Error getting audio duration for {file_path}: {e}")
-        return 0
 
 
 async def send_track_audio(event: types.Message, metadata, dl_track_info):
