@@ -3,16 +3,15 @@ import hashlib
 import math
 import os
 import re
-import ssl  # Added for SSL context
+import ssl
 import traceback
 from pathlib import Path
-from urllib.parse import quote  # Added quote_plus for deezer_search usage
+from urllib.parse import quote
 from zipfile import ZipFile, ZIP_DEFLATED
-import functools  # Added for run_in_executor
-
+import functools
 import aiohttp
 import aioshutil
-import certifi  # Added for SSL certificates
+import certifi  # SSL certificates
 import requests
 from aiogram import F, types
 from aiogram import Router
@@ -28,16 +27,15 @@ from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 from unidecode import unidecode
 
-# --- Original Imports Restored ---
-from bot import bot  # Assuming bot instance is defined here
+from bot import bot
 from utils import (
     __,
     is_downloading,
     add_downloading,
     remove_downloading,
     TMP_DIR,
-)  # Assuming these are defined in utils
-from dl_utils.deezer_download import (  # Assuming these are in dl_utils.deezer_download
+)
+from dl_utils.deezer_download import (
     init_deezer_session,
     get_song_infos_from_deezer_website,
     download_song,
@@ -45,7 +43,7 @@ from dl_utils.deezer_download import (  # Assuming these are in dl_utils.deezer_
     deezer_search,
     TYPE_TRACK,
     TYPE_ALBUM,
-    # Add any other necessary imports from this module if needed
+    DeezerApiException,
 )
 
 
@@ -53,11 +51,6 @@ deezer_router = Router()
 
 
 class TelegramNetworkError(Exception):
-    pass
-
-
-# Custom Exception potentially used by deezer_search (based on snippet)
-class DeezerApiException(Exception):
     pass
 
 
@@ -72,11 +65,6 @@ DEEZER_URL = "https://deezer.com"
 API_URL = "https://api.deezer.com"
 API_TRACK = API_URL + "/track/%s"
 API_ALBUM = API_URL + "/album/%s"
-# API_SEARCH_TRK kept for reference if needed elsewhere, but inline uses deezer_search
-API_SEARCH_TRK = API_URL + "/search/track/?q=%s"
-API_PLAYLIST = (
-    API_URL + "/playlist/%s"
-)  # Note: Playlist handling not fully implemented in provided code
 
 TRACK_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?track/(\d+)/?$"
 ALBUM_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?album/(\d+)/?$"
@@ -121,19 +109,13 @@ async def download_track(track_id, retries=MAX_RETRIES):
                     )
 
             # Create a temporary directory for this track
-            # Note: Using attempt in the path might cause issues if a later attempt succeeds
-            # Let's use a consistent path based on track_id only for the final file.
-            # The download function itself might handle temp files internally.
-            # We'll create the main dir here, and let download_song manage its specifics.
             tmp_track_base_dir = Path(TMP_DIR) / "deezer" / "track" / str(track_id)
             tmp_track_base_dir.mkdir(parents=True, exist_ok=True)
 
             # Determine the expected final file path within our base dir
             song_path = tmp_track_base_dir / f"{track_id}.{get_file_extension()}"
 
-            # Perform the actual download using imported function
-            # download_song might need adjustment if it doesn't handle retries/temp files itself
-            # Assuming download_song attempts the download once to the specified path
+            # Perform the actual download
             download_song(
                 track_infos, str(song_path)
             )  # download_song expects string path
@@ -249,7 +231,6 @@ async def download_album(album_id, retries=MAX_RETRIES):
             track_id_for_log = ti.get("SNG_ID", "N/A")
             for attempt in range(track_retries):
                 try:
-                    # Use imported download_song
                     # Ensure download_song doesn't create its own conflicting temp dirs if possible
                     download_song(ti, str(sp))  # download_song expects string path
 
@@ -499,7 +480,6 @@ def get_album_metadata_from_api(album_id):
 
 def get_track_caption(metadata):
     """Generates caption for a single track using imported __ function."""
-    # Use the imported __ function for translations
     return (
         "<b>Track: {title}</b>\n"
         "{artist} - {release_date}\n"
@@ -510,7 +490,6 @@ def get_track_caption(metadata):
 
 def get_album_caption(metadata):
     """Generates caption for an album using imported __ function."""
-    # Use the imported __ function for translations
     return (
         "<b>Album: {title}</b>\n"
         "{artist} - {release_date}\n"
@@ -675,7 +654,7 @@ async def create_and_send_zip(
     event: types.Message, metadata, dl_tracks_info, is_album: bool
 ):
     """
-    Creates a zip archive (single or multi-part) and sends it.
+    Creates a zip archive (single or multipart) and sends it.
     Handles both copying to a path and sending directly to Telegram.
     Places files inside 'Artist - Album [Year]' directory within the zip.
     """
@@ -1040,7 +1019,6 @@ async def handle_track_link(event: types.Message, real_link=None):
         return
     track_id = track_match.group(2)
 
-    # Use imported is_downloading and add_downloading
     if is_downloading(user_id):
         await event.answer(
             __("running_download"), reply_markup=types.ReplyKeyboardRemove()
@@ -1048,8 +1026,8 @@ async def handle_track_link(event: types.Message, real_link=None):
         return
 
     add_downloading(user_id)
-    # Use imported __ function
     tmp_msg = await event.answer(__("downloading"))
+
     download_dir_to_clean = None  # Store the path to clean up
 
     try:
@@ -1084,10 +1062,8 @@ async def handle_track_link(event: types.Message, real_link=None):
         print(traceback.format_exc())
         await tmp_msg.delete()
         error_message = str(e) if str(e) else "An unknown error occurred."
-        # Use imported __ function
         await event.answer(f"{__('download_error')} {error_message}")
     finally:
-        # Use imported remove_downloading
         remove_downloading(user_id)
         # Cleanup the download directory if it was set
         if download_dir_to_clean and download_dir_to_clean.exists():
@@ -1112,7 +1088,6 @@ async def handle_album_link(event: types.Message, real_link=None):
         return
     album_id = album_match.group(2)
 
-    # Use imported is_downloading and add_downloading
     if is_downloading(user_id):
         await event.answer(
             __("running_download"), reply_markup=types.ReplyKeyboardRemove()
@@ -1120,7 +1095,6 @@ async def handle_album_link(event: types.Message, real_link=None):
         return
 
     add_downloading(user_id)
-    # Use imported __ function
     tmp_msg = await event.answer(__("downloading"))
     download_dir_to_clean = None  # Store the path to clean up
 
@@ -1163,10 +1137,8 @@ async def handle_album_link(event: types.Message, real_link=None):
         print(traceback.format_exc())
         await tmp_msg.delete()
         error_message = str(e) if str(e) else "An unknown error occurred."
-        # Use imported __ function
         await event.answer(f"{__('download_error')} {error_message}")
     finally:
-        # Use imported remove_downloading
         remove_downloading(user_id)
         # Cleanup the download directory if it was set or constructed
         if download_dir_to_clean and download_dir_to_clean.exists():
@@ -1209,7 +1181,6 @@ async def handle_shortlink(event: types.Message):
         #     await handle_playlist_link(event, real_link)
         else:
             print("Unknown link type after resolving: " + real_link)
-            # Use imported __ function
             await event.answer(
                 __("download_error") + " Unsupported link type after resolving."
             )
@@ -1217,25 +1188,21 @@ async def handle_shortlink(event: types.Message):
     except aiohttp.ClientConnectorCertificateError as e:
         await tmp_msg.delete()
         print(f"SSL Certificate Verification Error resolving {event.text}: {e}")
-        # Use imported __ function
         await event.answer(
             f"{__('resolve_error')} {__('ssl_error')}. Please check system certificates or network configuration."
         )
     except asyncio.TimeoutError:
         await tmp_msg.delete()
         print(f"Timeout resolving shortlink {event.text}")
-        # Use imported __ function
         await event.answer(f"{__('resolve_error')} Timeout while resolving the link.")
     except aiohttp.ClientError as e:
         await tmp_msg.delete()
         print(f"Error resolving shortlink {event.text}: {e}")
-        # Use imported __ function
         await event.answer(f"{__('resolve_error')} Could not resolve shortlink: {e}")
     except Exception as e:
         await tmp_msg.delete()
         print(f"Unexpected error handling shortlink {event.text}: {e}")
         print(traceback.format_exc())
-        # Use imported __ function
         await event.answer(f"{__('resolve_error')} Unexpected error: {e}")
 
 
@@ -1250,7 +1217,6 @@ async def inline_search_handler(inline_query: InlineQuery):
     """
     query = inline_query.query.strip()
     items = []
-    # Use imported constant
     search_type = TYPE_TRACK  # Default search type
 
     if not query:
@@ -1264,7 +1230,6 @@ async def inline_search_handler(inline_query: InlineQuery):
         return
 
     # Determine search type based on prefixes (case-insensitive)
-    # Use imported constants
     words = query.split(maxsplit=1)
     first_word = words[0].lower()
 
@@ -1286,8 +1251,6 @@ async def inline_search_handler(inline_query: InlineQuery):
     try:
         init_deezer_session("", DEFAULT_QUALITY)
         loop = asyncio.get_running_loop()
-        # Use imported deezer_search function
-        # Ensure deezer_search is thread-safe if it modifies shared state
         search_results = await loop.run_in_executor(
             None, functools.partial(deezer_search, query, search_type)
         )
@@ -1295,7 +1258,6 @@ async def inline_search_handler(inline_query: InlineQuery):
         for item_data in search_results[:20]:  # Limit results sent
             try:
                 result_id = item_data.get("id", None)
-                # Use imported constants
                 id_type = item_data.get(
                     "id_type", TYPE_TRACK
                 )  # Assume track if missing
@@ -1305,7 +1267,6 @@ async def inline_search_handler(inline_query: InlineQuery):
                     print(f"Skipping item due to missing ID: {item_data}")
                     continue
 
-                # Use imported constants
                 if id_type == TYPE_ALBUM:
                     title = item_data.get("album", f"Album {result_id}")
                     artist = item_data.get("artist", "Unknown Artist")
@@ -1342,7 +1303,6 @@ async def inline_search_handler(inline_query: InlineQuery):
     except DeezerApiException as e:
         print(f"Deezer API exception during search: {e}")
         print(traceback.format_exc())
-        # Use imported __ function
         await bot.answer_inline_query(
             inline_query.id,
             results=[],
@@ -1354,7 +1314,6 @@ async def inline_search_handler(inline_query: InlineQuery):
     except Exception as e:
         print(f"Error running or processing deezer_search: {e}")
         print(traceback.format_exc())
-        # Use imported __ function
         await bot.answer_inline_query(
             inline_query.id,
             results=[],
@@ -1365,7 +1324,6 @@ async def inline_search_handler(inline_query: InlineQuery):
         return
 
     try:
-        # Use imported bot instance
         await bot.answer_inline_query(inline_query.id, results=items, cache_time=10)
     except Exception as e:
         # Catch potential Telegram API errors during sending results
