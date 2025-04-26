@@ -40,7 +40,7 @@ Your native language is not in the `langs.json` file ? Just make a pull request 
 Search for music in `inline mode` :
 
 ```
-@xxxxxxx_bot (album|track|artist) <search>
+@xxxxxxx_bot (album|track) <search>
 ```
 
 ![image](https://user-images.githubusercontent.com/24623168/141982877-ca7589d4-fe47-4b5a-b751-6d945c21f944.png)
