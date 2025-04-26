@@ -105,9 +105,7 @@ def clean_filename(filename):
 
 async def download_track(track_id, retries=MAX_RETRIES):
     """Downloads a single track from Deezer using imported functions."""
-    init_deezer_session(
-        "", DEFAULT_QUALITY
-    )  # Assuming ARL is handled globally or not needed for this flow
+    init_deezer_session("", DEFAULT_QUALITY)
     for attempt in range(retries):
         try:
             # Fetch track metadata from Deezer website (may include download details)
@@ -190,7 +188,7 @@ async def download_track(track_id, retries=MAX_RETRIES):
 
 async def download_album(album_id, retries=MAX_RETRIES):
     """Downloads all tracks from a Deezer album using imported functions, with per-track retries."""
-    init_deezer_session("", DEFAULT_QUALITY)  # Assuming ARL is handled globally
+    init_deezer_session("", DEFAULT_QUALITY)
     album_info_attempt = 0
     album_tracks_infos = None
     tmp_download_dir = None  # Define outside the loop for cleanup
@@ -1259,7 +1257,7 @@ async def inline_search_handler(inline_query: InlineQuery):
         await bot.answer_inline_query(
             inline_query.id,
             results=[],
-            cache_time=300,
+            cache_time=10,
             switch_pm_text="Type to search Deezer...",
             switch_pm_parameter="inline_help",
         )
@@ -1267,20 +1265,18 @@ async def inline_search_handler(inline_query: InlineQuery):
 
     # Determine search type based on prefixes (case-insensitive)
     # Use imported constants
-    if query.lower().startswith("album:"):
+    words = query.split(maxsplit=1)
+    first_word = words[0].lower()
+
+    if first_word == "album":
         search_type = TYPE_ALBUM
-        query = query[len("album:") :].strip()
-    elif query.lower().startswith("artist:"):
-        # Assuming deezer_search handles artist search within TYPE_TRACK or TYPE_ALBUM
-        search_type = TYPE_TRACK  # Or TYPE_ARTIST if deezer_search supports it
-        # query = query # Keep "artist: name" if deezer_search expects it
-        # query = query[len("artist:")].strip() # Or strip prefix if needed
-    elif query.lower().startswith("track:"):
+        query = words[1] if len(words) > 1 else ""
+    elif first_word == "track":
         search_type = TYPE_TRACK
-        query = query[len("track:") :].strip()
+        query = words[1] if len(words) > 1 else ""
 
     if not query:
-        await bot.answer_inline_query(inline_query.id, results=[], cache_time=300)
+        await bot.answer_inline_query(inline_query.id, results=[], cache_time=10)
         return
 
     print(
@@ -1288,6 +1284,7 @@ async def inline_search_handler(inline_query: InlineQuery):
     )
 
     try:
+        init_deezer_session("", DEFAULT_QUALITY)
         loop = asyncio.get_running_loop()
         # Use imported deezer_search function
         # Ensure deezer_search is thread-safe if it modifies shared state
@@ -1324,12 +1321,6 @@ async def inline_search_handler(inline_query: InlineQuery):
                         description += f" - {album_title}"
                     link = DEEZER_URL + "/track/%s" % quote(str(result_id))
                     inline_result_id = f"track_{result_id}"
-                # Add handling for other types like Artist if deezer_search returns them
-                # elif id_type == TYPE_ARTIST:
-                #     title = item_data.get("artist", f"Artist {result_id}")
-                #     description = "Artist"
-                #     link = DEEZER_URL + "/artist/%s" % quote(str(result_id))
-                #     inline_result_id = f"artist_{result_id}"
                 else:
                     print(f"Skipping item with unhandled id_type: {id_type}")
                     continue
@@ -1375,7 +1366,7 @@ async def inline_search_handler(inline_query: InlineQuery):
 
     try:
         # Use imported bot instance
-        await bot.answer_inline_query(inline_query.id, results=items, cache_time=300)
+        await bot.answer_inline_query(inline_query.id, results=items, cache_time=10)
     except Exception as e:
         # Catch potential Telegram API errors during sending results
         print(f"Error sending inline query results to Telegram: {e}")
