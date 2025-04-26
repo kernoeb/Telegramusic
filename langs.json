@@ -1,17 +1,17 @@
 {
   "downloading": {
-    "fr": "Téléchargement en cours...",
-    "en": "Downloading...",
-    "es": "Descargando...",
-    "pt": "Está fazendo o download...",
-    "in": "Anda sedang download...",
-    "de": "Es wird heruntergeladen...",
-    "zh": "下载中...",
-    "ar": "جارٍ التنزيل..."
+    "fr": "⏳ Téléchargement en cours...",
+    "en": "⏳ Downloading...",
+    "es": "⏳ Descargando...",
+    "pt": "⏳ Está fazendo o download...",
+    "in": "⏳ Anda sedang download...",
+    "de": "⏳ Es wird heruntergeladen...",
+    "zh": "⏳ 下载中...",
+    "ar": "⏳ جارٍ التنزيل..."
   },
   "track_link": {
     "fr": "Lien du track",
-    "en": "Track link",
+    "en": "Track Link",
     "es": "Enlace de la canción",
     "pt": "Link da música",
     "in": "Tautan musik",
@@ -21,7 +21,7 @@
   },
   "album_link": {
     "fr": "Lien de l'album",
-    "en": "Album link",
+    "en": "Album Link",
     "es": "Link del álbum",
     "pt": "Link do Álbum",
     "in": "Tautan Album",
@@ -40,23 +40,53 @@
     "ar": "رابط القائمة"
   },
   "download_error": {
-    "fr": "Échec du téléchargement.",
-    "en": "Download failed.",
-    "es": "Descarga fallida",
-    "pt": "Aconteceu um erro durante o download",
-    "in": "Terjadi kesalahan selama download",
-    "de": "Beim Herunterladen ist ein Fehler aufgetreten",
-    "zh": "下载失败。",
-    "ar": "فشل التنزيل."
+    "fr": "❌ Échec du téléchargement.",
+    "en": "❌ Error during download:",
+    "es": "❌ Descarga fallida",
+    "pt": "❌ Aconteceu um erro durante o download",
+    "in": "❌ Terjadi kesalahan selama download",
+    "de": "❌ Beim Herunterladen ist ein Fehler aufgetreten",
+    "zh": "❌ 下载失败。",
+    "ar": "❌ فشل التنزيل."
   },
   "running_download": {
-    "fr": "Un téléchargement est déjà en cours !",
-    "en": "A download is already in progress!",
-    "es": "Una descarga ya está en proceso",
-    "pt": "Um download já está em andamento!",
-    "in": "Pengunduhan sedang berlangsung!",
-    "de": "Ein Download ist bereits in Bearbeitung!",
-    "zh": "已有下载正在进行中！",
-    "ar": "عملية تنزيل جارية بالفعل!"
+    "fr": "⚠️ Un téléchargement est déjà en cours !",
+    "en": "⚠️ Another download is already running. Please wait.",
+    "es": "⚠️ Una descarga ya está en proceso",
+    "pt": "⚠️ Um download já está em andamento!",
+    "in": "⚠️ Pengunduhan sedang berlangsung!",
+    "de": "⚠️ Ein Download ist bereits in Bearbeitung!",
+    "zh": "⚠️ 已有下载正在进行中！",
+    "ar": "⚠️ عملية تنزيل جارية بالفعل!"
+  },
+  "resolve_error": {
+    "fr": "❌ Erreur lors de la résolution du lien:",
+    "en": "❌ Error resolving link:",
+    "es": "❌ Error al resolver el enlace:",
+    "pt": "❌ Erro ao resolver o link:",
+    "in": "❌ Kesalahan resolusi tautan:",
+    "de": "❌ Fehler beim Auflösen des Links:",
+    "zh": "❌ 解析链接时出错:",
+    "ar": "❌ خطأ في حل الرابط:"
+  },
+  "ssl_error": {
+    "fr": "Erreur de certificat SSL",
+    "en": "SSL Certificate Error",
+    "es": "Error de certificado SSL",
+    "pt": "Erro de certificado SSL",
+    "in": "Kesalahan Sertifikat SSL",
+    "de": "SSL-Zertifikatsfehler",
+    "zh": "SSL 证书错误",
+    "ar": "خطأ في شهادة SSL"
+  },
+  "search_error": {
+    "fr": "❌ Erreur lors de la recherche:",
+    "en": "❌ Error during search:",
+    "es": "❌ Error durante la búsqueda:",
+    "pt": "❌ Erro durante a pesquisa:",
+    "in": "❌ Kesalahan selama pencarian:",
+    "de": "❌ Fehler bei der Suche:",
+    "zh": "❌ 搜索过程中出错:",
+    "ar": "❌ خطأ أثناء البحث:"
   }
 }

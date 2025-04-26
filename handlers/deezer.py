@@ -3,14 +3,16 @@ import hashlib
 import math
 import os
 import re
+import ssl  # Added for SSL context
 import traceback
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote  # Added quote_plus for deezer_search usage
 from zipfile import ZipFile, ZIP_DEFLATED
+import functools  # Added for run_in_executor
 
 import aiohttp
 import aioshutil
-import deezloader.deezloader
+import certifi  # Added for SSL certificates
 import requests
 from aiogram import F, types
 from aiogram import Router
@@ -22,16 +24,30 @@ from aiogram.types import (
     InputTextMessageContent,
     InlineQueryResultArticle,
 )
-from aioify import aioify
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 from unidecode import unidecode
 
-from bot import bot
-from utils import __, is_downloading, add_downloading, remove_downloading, TMP_DIR
+# --- Original Imports Restored ---
+from bot import bot  # Assuming bot instance is defined here
+from utils import (
+    __,
+    is_downloading,
+    add_downloading,
+    remove_downloading,
+    TMP_DIR,
+)  # Assuming these are defined in utils
+from dl_utils.deezer_download import (  # Assuming these are in dl_utils.deezer_download
+    init_deezer_session,
+    get_song_infos_from_deezer_website,
+    download_song,
+    get_file_extension,
+    deezer_search,
+    TYPE_TRACK,
+    TYPE_ALBUM,
+    # Add any other necessary imports from this module if needed
+)
 
-deezloader_async = aioify(obj=deezloader.deezloader, name="deezloader_async")
-download = deezloader_async.DeeLogin(os.environ.get("DEEZER_TOKEN"))
 
 deezer_router = Router()
 
@@ -40,7 +56,12 @@ class TelegramNetworkError(Exception):
     pass
 
 
-DEFAULT_QUALITY = "FLAC" if os.environ.get("ENABLE_FLAC") == "1" else "MP3_320"
+# Custom Exception potentially used by deezer_search (based on snippet)
+class DeezerApiException(Exception):
+    pass
+
+
+DEFAULT_QUALITY = "flac" if os.environ.get("ENABLE_FLAC") == "1" else "mp3"
 print("Default quality: " + DEFAULT_QUALITY)
 
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 5))
@@ -51,617 +72,1315 @@ DEEZER_URL = "https://deezer.com"
 API_URL = "https://api.deezer.com"
 API_TRACK = API_URL + "/track/%s"
 API_ALBUM = API_URL + "/album/%s"
+# API_SEARCH_TRK kept for reference if needed elsewhere, but inline uses deezer_search
 API_SEARCH_TRK = API_URL + "/search/track/?q=%s"
-API_PLAYLIST = API_URL + "/playlist/%s"
+API_PLAYLIST = (
+    API_URL + "/playlist/%s"
+)  # Note: Playlist handling not fully implemented in provided code
 
 TRACK_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?track/(\d+)/?$"
 ALBUM_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?album/(\d+)/?$"
-PLAYLIST_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?playlist/(\d+)/?$"
+PLAYLIST_REGEX = r"https?://(?:www\.)?deezer\.com/([a-z]*/)?playlist/(\d+)/?$"  # Note: Playlist handling not fully implemented
 
 COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
 
 def clean_filename(filename):
-    # replace ".." at the beginning of the filename
-    filename = re.sub(r"^\.\.", "__", filename)
-    # replace "." at the beginning of the filename
-    filename = re.sub(r"^\.", "_", filename)
-    # replace characters that are not allowed in filenames
-    return re.sub(r'[\\/*?:"<>|]', "_", filename)
+    """
+    Cleans a string to be suitable for use as a filename or directory name.
+    Removes or replaces potentially problematic characters.
+    """
+    # Replace potentially problematic characters with underscores
+    cleaned = re.sub(r'[\\/*?:"<>|]', "_", filename)
+    # Remove leading/trailing whitespace and dots
+    cleaned = cleaned.strip(" .")
+    # Replace consecutive underscores with a single underscore
+    cleaned = re.sub(r"_+", "_", cleaned)
+    # Ensure the filename is not empty after cleaning
+    if not cleaned:
+        return "_"
+    return cleaned
 
 
-async def download_track(url, retries=5):
+async def download_track(track_id, retries=MAX_RETRIES):
+    """Downloads a single track from Deezer using imported functions."""
+    init_deezer_session(
+        "", DEFAULT_QUALITY
+    )  # Assuming ARL is handled globally or not needed for this flow
     for attempt in range(retries):
         try:
-            return await download.download_trackdee(
-                url,
-                output_dir=TMP_DIR,
-                quality_download=DEFAULT_QUALITY,
-                recursive_download=True,
-                recursive_quality=True,
-                not_interface=False,
-            )
-        except Exception as e:
-            if attempt < retries - 1:
-                sleep_time = 1 * (attempt + 1)
-                print(
-                    f"Error occurred while downloading track. Retrying... ({attempt + 1}/{retries}) (Sleeping for {sleep_time} seconds)"
-                )
-                await asyncio.sleep(1 * (attempt + 1))
-            else:
-                print(f"Failed to download track after {retries} attempts. Error: {e}")
-                raise
-
-
-async def download_album(url, retries=MAX_RETRIES):
-    for attempt in range(retries):
-        try:
-            return await download.download_albumdee(
-                url,
-                output_dir=TMP_DIR,
-                quality_download=DEFAULT_QUALITY,
-                recursive_download=True,
-                recursive_quality=True,
-                not_interface=False,
-            )
-        except Exception as e:
-            if attempt < retries - 1:
-                sleep_time = 1 * (attempt + 1)
-                print(
-                    f"Error occurred while downloading album. Retrying... ({attempt + 1}/{retries}) (Sleeping for {sleep_time} seconds)"
-                )
-                await asyncio.sleep(1 * (attempt + 1))
-            else:
-                print(f"Failed to download album after {retries} attempts. Error: {e}")
-                raise
-
-
-def add_file_to_zip(zipf, file, track_file_mapping):
-    """Helper function to add a file to the zip."""
-    final_name = track_file_mapping.get(file, os.path.basename(file))
-    zipf.write(file, final_name)
-
-
-def create_single_zip(files, track_file_mapping, output_name):
-    """Create a single zip file."""
-    zip_name = f"{output_name}.zip"
-    with ZipFile(zip_name, "w", ZIP_DEFLATED) as zipf:
-        for file in files:
-            add_file_to_zip(zipf, file, track_file_mapping)
-    return [zip_name]
-
-
-def create_multi_part_zip(source_dir, output_name, dl_tracks, max_size_mb=45):
-    """Create a multi-part zip file."""
-    max_size = max_size_mb * 1024 * 1024  # Convert to bytes
-    all_files = set(os.path.join(source_dir, f) for f in os.listdir(source_dir))
-
-    # Find and prioritize the cover file
-    cover_file = next(
-        (f for f in all_files if os.path.basename(f) == "cover.jpg"), None
-    )
-    files = [cover_file] if cover_file else []
-    if cover_file:
-        all_files.discard(cover_file)
-
-    # Map track paths to their corresponding file names
-    track_file_mapping = {}
-    for track in dl_tracks:
-        track_file = os.path.join(source_dir, os.path.basename(track.song_path))
-        if track_file in all_files:
-            files.append(track_file)
-            all_files.remove(track_file)
-            track_file_mapping[track_file] = (
-                f"{clean_filename(track.song_name)}{track.file_format}"
-            )
-
-    # Add any remaining files
-    files.extend(sorted(all_files))
-
-    # Check total size of all files
-    total_size = sum(os.path.getsize(f) for f in files if f)
-
-    if total_size <= max_size:
-        return create_single_zip(files, track_file_mapping, output_name)
-
-    # Handle multi-part zip creation
-    tmp_zip_files = []
-    current_files = files[:]
-    num_parts = math.ceil(total_size / max_size)
-
-    for i in range(num_parts):
-        zip_name = f"{output_name}_part{i + 1}.zip"
-        with ZipFile(zip_name, "w", ZIP_DEFLATED) as zipf:
-            current_size = 0
-            while current_files and current_size < max_size:
-                file = current_files[0]  # Peek the first file
-                file_size = os.path.getsize(file)
-
-                # Handle case where a single file is larger than max_size
-                if file_size > max_size:
+            # Fetch track metadata from Deezer website (may include download details)
+            track_infos = get_song_infos_from_deezer_website("track", track_id)
+            if not track_infos:
+                print(f"Attempt {attempt + 1}: Could not get track info for {track_id}")
+                if attempt < retries - 1:
+                    await asyncio.sleep(1 * (attempt + 1))
+                    continue
+                else:
                     raise ValueError(
-                        f"File {file} exceeds the maximum allowed zip size."
+                        f"Failed to get track info for {track_id} after {retries} attempts."
                     )
 
-                # Check if file can be added to the current zip part
-                if (
-                    current_size + file_size <= max_size
-                    or len(tmp_zip_files) == num_parts - 1
-                ):
-                    add_file_to_zip(zipf, file, track_file_mapping)
-                    current_files.pop(0)  # Actually remove the file after adding
-                    current_size += file_size
-                else:
-                    break
+            # Create a temporary directory for this track
+            # Note: Using attempt in the path might cause issues if a later attempt succeeds
+            # Let's use a consistent path based on track_id only for the final file.
+            # The download function itself might handle temp files internally.
+            # We'll create the main dir here, and let download_song manage its specifics.
+            tmp_track_base_dir = Path(TMP_DIR) / "deezer" / "track" / str(track_id)
+            tmp_track_base_dir.mkdir(parents=True, exist_ok=True)
 
-        tmp_zip_files.append(zip_name)
+            # Determine the expected final file path within our base dir
+            song_path = tmp_track_base_dir / f"{track_id}.{get_file_extension()}"
 
-    # If there are any remaining files, ensure they are added to the last zip part
-    if current_files:
-        with ZipFile(tmp_zip_files[-1], "a", ZIP_DEFLATED) as zipf:
-            for file in current_files:
-                add_file_to_zip(zipf, file, track_file_mapping)
+            # Perform the actual download using imported function
+            # download_song might need adjustment if it doesn't handle retries/temp files itself
+            # Assuming download_song attempts the download once to the specified path
+            download_song(
+                track_infos, str(song_path)
+            )  # download_song expects string path
 
-    return tmp_zip_files
+            # Check if download was successful (e.g., file exists and has size)
+            if not song_path.exists() or song_path.stat().st_size == 0:
+                # Clean up potentially empty file before retrying
+                if song_path.exists():
+                    try:
+                        song_path.unlink()
+                    except OSError:
+                        pass
+                raise IOError(f"Downloaded file {song_path} is missing or empty.")
+
+            # Add download-specific details to the track_infos dictionary
+            track_infos["song_path"] = str(song_path)  # Store as string
+            track_infos["song_name"] = track_infos.get("SNG_TITLE", f"Track {track_id}")
+            track_infos["artist_name"] = track_infos.get("ART_NAME", "Unknown Artist")
+            track_infos["file_format"] = get_file_extension()
+            track_infos["download_dir"] = str(tmp_track_base_dir)  # Store base dir path
+            # Carry over track number if present in original info
+            if "TRACK_NUMBER" in track_infos:
+                track_infos["TRACK_NUMBER"] = track_infos["TRACK_NUMBER"]
+
+            print(f"Successfully downloaded track {track_id} to {song_path}")
+            return track_infos  # Success, return details
+
+        except Exception as e:
+            print(
+                f"Error downloading track {track_id} on attempt {attempt + 1}/{retries}: {e}"
+            )
+            # No specific directory per attempt to clean here, as we use a consistent base dir.
+            # The failed/empty file is handled above before raising IOError.
+
+            if attempt < retries - 1:
+                sleep_time = 1 * (attempt + 1)
+                print(f"Retrying in {sleep_time} seconds...")
+                await asyncio.sleep(sleep_time)
+            else:
+                print(f"Failed to download track {track_id} after {retries} attempts.")
+                # Clean up the base directory if the track ultimately failed
+                if "tmp_track_base_dir" in locals() and tmp_track_base_dir.exists():
+                    await aioshutil.rmtree(tmp_track_base_dir, ignore_errors=True)
+                raise  # Re-raise the last exception
+
+    # This part should ideally not be reached if retries are exhausted (exception raised)
+    # Clean up the base directory if we somehow exit the loop without success
+    if "tmp_track_base_dir" in locals() and tmp_track_base_dir.exists():
+        await aioshutil.rmtree(tmp_track_base_dir, ignore_errors=True)
+    return None
 
 
-async def get_track_info(track_id):
-    """Get track information from Deezer API."""
-    track_json = requests.get(API_TRACK % quote(str(track_id))).json()
-    cover_url = (
-        track_json["album"]["cover_xl"]
-        or f"https://e-cdns-images.dzcdn.net/images/cover/{track_json['album']['md5_image']}/1200x0-000000-100-0-0.jpg"
+async def download_album(album_id, retries=MAX_RETRIES):
+    """Downloads all tracks from a Deezer album using imported functions, with per-track retries."""
+    init_deezer_session("", DEFAULT_QUALITY)  # Assuming ARL is handled globally
+    album_info_attempt = 0
+    album_tracks_infos = None
+    tmp_download_dir = None  # Define outside the loop for cleanup
+
+    # --- Retry fetching album metadata ---
+    while album_info_attempt < retries:
+        try:
+            album_tracks_infos = get_song_infos_from_deezer_website("album", album_id)
+            if not album_tracks_infos:
+                raise ValueError(
+                    f"Could not get album info for {album_id} (empty list received)"
+                )
+
+            # Create a temporary directory for this album download ONCE after successful metadata fetch
+            tmp_download_dir = Path(TMP_DIR) / "deezer" / "album" / str(album_id)
+            tmp_download_dir.mkdir(parents=True, exist_ok=True)
+            print(
+                f"Album metadata fetched successfully. Download dir: {tmp_download_dir}"
+            )
+            break  # Exit metadata retry loop on success
+
+        except Exception as e:
+            album_info_attempt += 1
+            print(
+                f"Attempt {album_info_attempt}/{retries}: Error fetching album info for {album_id}: {e}"
+            )
+            if album_info_attempt < retries:
+                sleep_time = 1 * album_info_attempt
+                print(f"Retrying album info fetch in {sleep_time} seconds...")
+                await asyncio.sleep(sleep_time)
+            else:
+                print(
+                    f"Failed to get album info for {album_id} after {retries} attempts."
+                )
+                # Clean up dir if it was created in a previous failed attempt (unlikely here, but safe)
+                if tmp_download_dir and tmp_download_dir.exists():
+                    await aioshutil.rmtree(tmp_download_dir, ignore_errors=True)
+                raise  # Re-raise the last exception related to fetching album info
+
+    if not album_tracks_infos or not tmp_download_dir:
+        # This should not happen if the loop above works correctly, but as a safeguard:
+        print(f"Failed to initialize album download for {album_id}.")
+        return None  # Indicate failure
+
+    # --- Download individual tracks with retries ---
+    downloaded_tracks_details = []
+    tasks = []
+
+    # Prepare download tasks for each track
+    for i, track_infos in enumerate(album_tracks_infos):
+        track_sng_id = track_infos.get("SNG_ID", f"album_{album_id}_track_{i}")
+        # Define the final path within the album's download directory
+        song_path = tmp_download_dir / f"{track_sng_id}.{get_file_extension()}"
+
+        # Create a closure to capture loop variables correctly for async task
+        # This inner function now includes the retry logic for a single track
+        async def download_single_with_retry(ti, sp, track_retries=MAX_RETRIES):
+            track_id_for_log = ti.get("SNG_ID", "N/A")
+            for attempt in range(track_retries):
+                try:
+                    # Use imported download_song
+                    # Ensure download_song doesn't create its own conflicting temp dirs if possible
+                    download_song(ti, str(sp))  # download_song expects string path
+
+                    if not sp.exists() or sp.stat().st_size == 0:
+                        # Clean up potentially empty file before retrying
+                        if sp.exists():
+                            try:
+                                sp.unlink()
+                            except OSError:
+                                pass
+                        raise IOError(f"Downloaded file {sp} is missing or empty.")
+
+                    # Add details after successful download
+                    ti_copy = ti.copy()  # Work on a copy
+                    ti_copy["song_path"] = str(sp)
+                    ti_copy["song_name"] = ti_copy.get(
+                        "SNG_TITLE", f"Track {track_sng_id}"
+                    )
+                    ti_copy["artist_name"] = ti_copy.get("ART_NAME", "Unknown Artist")
+                    ti_copy["file_format"] = get_file_extension()
+                    # Keep track number if available
+                    if "TRACK_NUMBER" in ti:
+                        ti_copy["TRACK_NUMBER"] = ti["TRACK_NUMBER"]
+
+                    print(
+                        f"Successfully downloaded track {track_id_for_log} to {sp} (attempt {attempt + 1})"
+                    )
+                    return ti_copy  # Success for this track
+
+                except Exception as track_e:
+                    print(
+                        f"Error downloading track {track_id_for_log} (attempt {attempt + 1}/{track_retries}): {track_e}"
+                    )
+                    # Clean up potentially failed/partial file for this attempt
+                    if sp.exists():
+                        try:
+                            sp.unlink()
+                        except OSError:
+                            pass
+
+                    if attempt < track_retries - 1:
+                        sleep_time = 1 * (
+                            attempt + 1
+                        )  # Exponential backoff might be better
+                        print(
+                            f"Retrying track {track_id_for_log} in {sleep_time} seconds..."
+                        )
+                        await asyncio.sleep(sleep_time)
+                    else:
+                        print(
+                            f"Failed to download track {track_id_for_log} after {track_retries} attempts."
+                        )
+                        return None  # Indicate failure for this specific track after all retries
+
+            return None  # Should not be reached, but indicates failure
+
+        tasks.append(
+            download_single_with_retry(track_infos, song_path)
+        )  # Pass original dict and path
+
+    # Run downloads concurrently
+    results = await asyncio.gather(*tasks)
+
+    # Filter out failed downloads (None results)
+    downloaded_tracks_details = [res for res in results if res is not None]
+
+    # Check if *any* tracks were successfully downloaded
+    if not downloaded_tracks_details:
+        print(f"Failed to download any tracks for album {album_id}.")
+        # Clean up the main album directory as the entire process failed
+        if tmp_download_dir and tmp_download_dir.exists():
+            await aioshutil.rmtree(tmp_download_dir, ignore_errors=True)
+        # Raising an exception here will be caught by the handler's main try/except
+        raise Exception(
+            f"Failed to download any tracks for album {album_id} after retries."
+        )
+
+    # Add the download directory to all *successful* track dicts
+    # This is needed for zipping later
+    for track_detail in downloaded_tracks_details:
+        track_detail["download_dir"] = str(tmp_download_dir)
+
+    print(
+        f"Successfully downloaded {len(downloaded_tracks_details)} out of {len(album_tracks_infos)} tracks for album {album_id} to {tmp_download_dir}"
     )
-    cover = requests.get(cover_url, stream=True).raw
-    artists = [c["name"] for c in track_json["contributors"]]
-    release_date = track_json["release_date"].split("-")
-    release_date = f"{release_date[2]}/{release_date[1]}/{release_date[0]}"
-    year = release_date.split("/")[2]
-    clean_title = re.sub(r'[\\/*?:"<>|]', "", track_json["title"])
-    clean_artist = re.sub(r'[\\/*?:"<>|]', "", track_json["artist"]["name"])
-    final_title = f"{clean_artist} - {clean_title} ({year})"
-    return track_json, cover, artists, release_date, final_title
+    # Return list of successfully downloaded track details
+    # The calling handler will manage cleanup of the tmp_download_dir
+    return downloaded_tracks_details
 
 
-async def get_album_info(album_id):
-    """Get album information from Deezer API."""
-    album = requests.get(API_ALBUM % quote(str(album_id))).json()
-    tracks = requests.get(API_ALBUM % quote(str(album_id)) + "/tracks?limit=100").json()
-    cover_url = (
-        album["cover_xl"]
-        or f"https://e-cdns-images.dzcdn.net/images/cover/{album['md5_image']}/1200x0-000000-100-0-0.jpg"
-    )
-    cover = requests.get(cover_url, stream=True).raw
-    titles = [track["title"] for track in tracks["data"]]
-    artists = [
-        [
-            c["name"]
-            for c in requests.get(API_TRACK % quote(str(track["id"]))).json()[
-                "contributors"
-            ]
-        ]
-        for track in tracks["data"]
-    ]
-    release_date = album["release_date"].split("-")
-    release_date = f"{release_date[2]}/{release_date[1]}/{release_date[0]}"
-    year = release_date.split("/")[2]
-    clean_title = re.sub(r'[\\/*?:"<>|]', "", album["title"])
-    clean_artist = re.sub(r'[\\/*?:"<>|]', "", album["artist"]["name"])
-    final_title = f"{clean_artist} - {clean_title} ({year})"
-    return album, tracks, cover, titles, artists, release_date, final_title
+def get_track_metadata_from_api(track_id):
+    """Gets track metadata from the official Deezer API."""
+    try:
+        response = requests.get(API_TRACK % quote(str(track_id)))
+        response.raise_for_status()  # Raise an exception for bad status codes
+        track_json = response.json()
 
+        if "error" in track_json:
+            raise ValueError(f"API Error for track {track_id}: {track_json['error']}")
 
-async def send_track(event, track_json, cover, artists, release_date, final_title, dl):
-    """Send the track to the user."""
-    if os.environ.get("FORMAT") == "zip":
-        await send_zip(event, track_json, cover, release_date, final_title, dl)
-    else:
-        await send_audio(event, track_json, cover, artists, release_date, dl)
-
-
-async def send_zip(event, json_data, cover, release_date, final_title, dl):
-    """Send the track as a zip file."""
-    songs_parent_dir = os.path.dirname(dl.song_path)
-    read_cover = cover.read()
-    with open(os.path.join(songs_parent_dir, "cover.jpg"), "wb") as cover_file:
-        cover_file.write(read_cover)
-
-    if COPY_FILES_PATH is not None and FILE_LINK_TEMPLATE is not None:
-        md5_hash = hashlib.md5(final_title.encode()).hexdigest()[:8]
-        zip_name = f"{unidecode(json_data['artist']['name'])} - {unidecode(json_data['title'])} ({md5_hash}).zip"
-        url_safe_zip_name = re.sub(r"[^.a-zA-Z0-9()_-]", "_", zip_name)
-
-        with ZipFile(
-            Path(COPY_FILES_PATH) / url_safe_zip_name, "w", ZIP_DEFLATED
-        ) as zipf:
-            zipf.write(dl.song_path, clean_filename(dl.song_name) + dl.file_format)
-            zipf.write(os.path.join(songs_parent_dir, "cover.jpg"), "cover.jpg")
-
-        await event.answer_photo(
-            BufferedInputFile(read_cover, filename="cover.jpg"),
-            caption=get_caption(json_data, release_date),
-            parse_mode="HTML",
+        # Extract cover URL, preferring larger sizes
+        cover_url = (
+            track_json.get("album", {}).get("cover_xl")
+            or track_json.get("album", {}).get("cover_big")
+            or track_json.get("album", {}).get("cover_medium")
+            or f"https://e-cdns-images.dzcdn.net/images/cover/{track_json.get('album', {}).get('md5_image', '')}/1200x0-000000-100-0-0.jpg"
         )
 
-        await event.answer(FILE_LINK_TEMPLATE.format(url_safe_zip_name))
-    else:
-        await aioshutil.make_archive(
-            Path(TMP_DIR) / final_title, "zip", songs_parent_dir
+        # Fetch cover image data
+        cover_response = requests.get(cover_url, stream=True)
+        cover_response.raise_for_status()
+        cover_data = cover_response.content  # Read content directly
+
+        # Extract other metadata
+        artists = [c["name"] for c in track_json.get("contributors", [])]
+        release_date_str = track_json.get("release_date", "0000-00-00")
+        try:
+            year = release_date_str.split("-")[0]
+            # Format date as DD/MM/YYYY
+            release_date_formatted = "/".join(reversed(release_date_str.split("-")))
+        except:
+            year = "0000"
+            release_date_formatted = "00/00/0000"
+
+        title = track_json.get("title", f"Track {track_id}")
+        artist_name = track_json.get("artist", {}).get("name", "Unknown Artist")
+        album_title = track_json.get("album", {}).get("title", "Unknown Album")
+        album_link = track_json.get("album", {}).get("link", "")
+        track_link = track_json.get("link", "")
+
+        # Clean names for file system use
+        clean_title = clean_filename(title)
+        clean_artist = clean_filename(artist_name)
+        clean_album_title = clean_filename(album_title)
+
+        # Prepare metadata dictionary
+        metadata = {
+            "id": track_id,
+            "title": title,
+            "artist": artist_name,
+            "album_title": album_title,
+            "artists_list": artists,
+            "release_date": release_date_formatted,
+            "year": year,
+            "album_link": album_link,
+            "track_link": track_link,
+            "cover_data": cover_data,
+            "api_json": track_json,  # Keep original json if needed
+            # For zip naming/structure
+            "clean_artist": clean_artist,
+            "clean_album_title": clean_album_title,
+            "clean_title": clean_title,
+        }
+        print(f"Fetched metadata for track {track_id}: {artist_name} - {title}")
+        return metadata
+
+    except requests.exceptions.RequestException as e:
+        print(f"Network error fetching metadata for track {track_id}: {e}")
+        raise
+    except Exception as e:
+        print(f"Error processing metadata for track {track_id}: {e}")
+        raise
+
+
+def get_album_metadata_from_api(album_id):
+    """Gets album and its tracks' metadata from the official Deezer API."""
+    try:
+        # Fetch main album info
+        album_response = requests.get(API_ALBUM % quote(str(album_id)))
+        album_response.raise_for_status()
+        album_json = album_response.json()
+        if "error" in album_json:
+            raise ValueError(f"API Error for album {album_id}: {album_json['error']}")
+
+        # Fetch track list (handle pagination if necessary, though 1000 limit is high)
+        tracks_response = requests.get(
+            API_ALBUM % quote(str(album_id)) + "/tracks?limit=1000"
+        )
+        tracks_response.raise_for_status()
+        tracks_json = tracks_response.json()
+        if "error" in tracks_json:
+            # Might happen if album is empty or restricted
+            print(
+                f"API Error fetching tracks for album {album_id}: {tracks_json['error']}"
+            )
+            tracks_data = []
+        else:
+            tracks_data = tracks_json.get("data", [])
+
+        # Extract cover URL
+        cover_url = (
+            album_json.get("cover_xl")
+            or album_json.get("cover_big")
+            or album_json.get("cover_medium")
+            or f"https://e-cdns-images.dzcdn.net/images/cover/{album_json.get('md5_image', '')}/1200x0-000000-100-0-0.jpg"
         )
 
-        await event.answer_document(
-            FSInputFile(Path(TMP_DIR) / f"{final_title}.zip"),
-            caption=get_caption(json_data, release_date),
-            parse_mode="HTML",
-        )
+        # Fetch cover image data
+        cover_response = requests.get(cover_url, stream=True)
+        cover_response.raise_for_status()
+        cover_data = cover_response.content
 
-    await event.delete()
-    # Check if the file exists and remove it if it does
-    zip_path = Path(TMP_DIR) / f"{final_title}.zip"
-    if zip_path.exists():
-        zip_path.unlink()
+        # Extract album metadata
+        release_date_str = album_json.get("release_date", "0000-00-00")
+        try:
+            year = release_date_str.split("-")[0]
+            release_date_formatted = "/".join(reversed(release_date_str.split("-")))
+        except:
+            year = "0000"
+            release_date_formatted = "00/00/0000"
+
+        album_title = album_json.get("title", f"Album {album_id}")
+        artist_name = album_json.get("artist", {}).get("name", "Unknown Artist")
+        album_link = album_json.get("link", "")
+
+        # Clean names for file system use
+        clean_artist = clean_filename(artist_name)
+        clean_album_title = clean_filename(album_title)
+
+        # Prepare metadata dictionary
+        metadata = {
+            "id": album_id,
+            "title": album_title,  # Album title
+            "artist": artist_name,  # Main album artist
+            "release_date": release_date_formatted,
+            "year": year,
+            "album_link": album_link,
+            "track_link": None,  # No single track link for album
+            "cover_data": cover_data,
+            "api_json": album_json,
+            "tracks_api_data": tracks_data,  # List of track dicts from API
+            # For zip naming/structure
+            "clean_artist": clean_artist,
+            "clean_album_title": clean_album_title,
+            "clean_title": clean_album_title,  # Use album title for clean_title contextually
+        }
+        print(f"Fetched metadata for album {album_id}: {artist_name} - {album_title}")
+        return metadata
+
+    except requests.exceptions.RequestException as e:
+        print(f"Network error fetching metadata for album {album_id}: {e}")
+        raise
+    except Exception as e:
+        print(f"Error processing metadata for album {album_id}: {e}")
+        raise
 
 
-async def send_audio(event, json_data, cover, artists, release_date, dl):
-    """Send the track as an audio file."""
+def get_track_caption(metadata):
+    """Generates caption for a single track using imported __ function."""
+    # Use the imported __ function for translations
+    return (
+        "<b>Track: {title}</b>\n"
+        "{artist} - {release_date}\n"
+        '<a href="{album_link}">' + __("album_link") + "</a>\n"
+        '<a href="{track_link}">' + __("track_link") + "</a>"
+    ).format(**metadata)
+
+
+def get_album_caption(metadata):
+    """Generates caption for an album using imported __ function."""
+    # Use the imported __ function for translations
+    return (
+        "<b>Album: {title}</b>\n"
+        "{artist} - {release_date}\n"
+        '<a href="{album_link}">' + __("album_link") + "</a>"
+    ).format(**metadata)
+
+
+def get_audio_duration(file_path):
+    """Get the duration of the audio file."""
+    try:
+        extension = os.path.splitext(file_path)[1].lower()
+        if extension == ".mp3":
+            audio = MP3(file_path)
+            return int(audio.info.length)
+        elif extension == ".flac":
+            audio = FLAC(file_path)
+            return int(audio.info.length)
+        else:
+            print(
+                f"Warning: Unsupported audio format for duration calculation: {extension}"
+            )
+            return 0  # Unknown duration
+    except Exception as e:
+        print(f"Error getting audio duration for {file_path}: {e}")
+        return 0
+
+
+async def send_track_audio(event: types.Message, metadata, dl_track_info):
+    """Sends a single track as an audio file."""
+    caption = get_track_caption(metadata)
+    song_path = dl_track_info["song_path"]
+    duration = get_audio_duration(song_path)
+
+    # Send cover photo first
     await event.answer_photo(
-        BufferedInputFile(cover.read(), filename="cover.jpg"),
-        caption=get_caption(json_data, release_date),
+        BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
+        caption=caption,
         parse_mode="HTML",
     )
-    await event.delete()
 
-    tmp_song = open(dl.song_path, "rb")
-    duration = get_audio_duration(tmp_song, dl.song_path)
-    tmp_song.seek(0)
-
+    # Send audio file
     await event.answer_audio(
-        FSInputFile(dl.song_path),
-        title=json_data["title"],
-        performer=", ".join(artists),
+        FSInputFile(song_path),
+        title=metadata["title"],
+        performer=", ".join(metadata.get("artists_list", [metadata["artist"]])),
         duration=duration,
         disable_notification=True,
     )
-    tmp_song.close()
 
 
-async def send_album_media_group(event, tracks, titles, artists):
-    """Send the album as a media group."""
-    group_media = []
-    for i, track in enumerate(tracks):
-        tmp_song = open(track.song_path, "rb")
-        duration = get_audio_duration(tmp_song, track.song_path)
-        tmp_song.seek(0)
-        group_media.append(
-            InputMediaAudio(
-                media=BufferedInputFile(
-                    tmp_song.read(),
-                    filename=titles[i] + os.path.splitext(track.song_path)[1],
-                ),
-                title=titles[i],
-                performer=", ".join(artists[i]),
-                duration=duration,
-            )
+async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
+    """Sends album tracks as audio files (individually or as media group)."""
+    caption = get_album_caption(metadata)
+
+    # Send cover photo first
+    await event.answer_photo(
+        BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
+        caption=caption,
+        parse_mode="HTML",
+    )
+
+    # Map API track data to downloaded files (using SNG_ID if available)
+    api_tracks_by_id = {
+        str(t.get("id", "")): t for t in metadata.get("tracks_api_data", [])
+    }
+    media_group = []
+    processed_files = []
+
+    # Sort downloaded tracks based on track number if available
+    try:
+        dl_tracks_info.sort(
+            key=lambda t: int(t.get("TRACK_NUMBER", "999"))
+            if str(t.get("TRACK_NUMBER", "999")).isdigit()
+            else 999
         )
-        tmp_song.close()
-    await event.answer_media_group(group_media, disable_notification=True)
+    except Exception as sort_e:
+        print(
+            f"Warning: Could not sort tracks by track number for sending. Error: {sort_e}"
+        )
 
+    for dl_info in dl_tracks_info:
+        song_path = dl_info["song_path"]
+        # Try to find matching API data for better titles/artists
+        # Extract potential ID from filename if SNG_ID wasn't stored reliably
+        potential_id = Path(song_path).stem  # e.g., '12345' from '12345.flac'
+        api_track = api_tracks_by_id.get(dl_info.get("SNG_ID")) or api_tracks_by_id.get(
+            potential_id
+        )
 
-async def send_album_tracks_individually(event, tracks, titles, artists):
-    """Send the album tracks individually."""
-    for i, track in enumerate(tracks):
-        tmp_song = open(track.song_path, "rb")
-        duration = get_audio_duration(tmp_song, track.song_path)
-        tmp_song.seek(0)
-        await event.answer_audio(
-            BufferedInputFile(
-                tmp_song.read(),
-                filename=titles[i] + os.path.splitext(track.song_path)[1],
-            ),
-            title=titles[i],
-            performer=", ".join(artists[i]),
+        if api_track:
+            title = api_track.get("title", dl_info["song_name"])
+            # Get contributors from the specific track API data if possible
+            artists = [c["name"] for c in api_track.get("contributors", [])]
+            if not artists:  # Fallback to main album artist
+                artists = [metadata["artist"]]
+            performer = ", ".join(artists)
+        else:
+            # Fallback if no matching API data found
+            title = dl_info["song_name"]
+            performer = dl_info["artist_name"]  # Artist info from download step
+
+        duration = get_audio_duration(song_path)
+        file_input = FSInputFile(song_path)  # Use FSInputFile for media group
+
+        media_item = InputMediaAudio(
+            media=file_input,
+            filename=f"{clean_filename(performer)} - {clean_filename(title)}.{dl_info['file_format']}",
+            title=title,
+            performer=performer,
             duration=duration,
-            disable_notification=True,
         )
-        tmp_song.close()
+        media_group.append(media_item)
+        processed_files.append(
+            {
+                "path": song_path,
+                "title": title,
+                "performer": performer,
+                "duration": duration,
+                "format": dl_info["file_format"],
+            }
+        )
 
+    # Try sending as media group (2-10 items)
+    if 2 <= len(media_group) <= 10:
+        try:
+            print(
+                f"Attempting to send album {metadata['id']} as media group ({len(media_group)} items)"
+            )
+            await event.answer_media_group(media_group, disable_notification=True)
+            print("Media group sent successfully.")
+            return  # Done if media group works
+        except Exception as e:
+            print(f"Failed to send as media group, sending individually: {e}")
+            # Fallback to individual sending below if media group fails
 
-def get_caption(json_data, release_date):
-    """Get the caption for the track."""
-    return (
-        "<b>Track: {}</b>"
-        '\n{} - {}\n<a href="{}">'
-        + __("album_link")
-        + '</a>\n<a href="{}">'
-        + __("track_link")
-        + "</a>"
-    ).format(
-        json_data["title"],
-        json_data["artist"]["name"],
-        release_date,
-        json_data["album"]["link"],
-        json_data["link"],
+    # Send individually if media group failed or not applicable
+    print(
+        f"Sending album {metadata['id']} tracks individually ({len(processed_files)} items)"
     )
+    for item in processed_files:
+        try:
+            # Use BufferedInputFile for individual sending to avoid potential issues with FSInputFile reuse
+            with open(item["path"], "rb") as f:
+                audio_data = f.read()
+            await event.answer_audio(
+                BufferedInputFile(
+                    audio_data,
+                    filename=f"{clean_filename(item['performer'])} - {clean_filename(item['title'])}.{item['format']}",
+                ),
+                title=item["title"],
+                performer=item["performer"],
+                duration=item["duration"],
+                disable_notification=True,
+            )
+            await asyncio.sleep(0.2)  # Small delay between messages
+        except Exception as e:
+            print(f"Error sending individual track {item['title']}: {e}")
+            await event.answer(f"⚠️ Error sending track: {item['title']}")
 
 
-def get_album_caption(album, release_date):
-    """Get the caption for the album."""
-    return (
-        '<b>Album: {}</b>\n{} - {}\n<a href="{}">' + __("album_link") + "</a>"
-    ).format(
-        album["title"],
-        album["artist"]["name"],
-        release_date,
-        album["link"],
+async def create_and_send_zip(
+    event: types.Message, metadata, dl_tracks_info, is_album: bool
+):
+    """
+    Creates a zip archive (single or multi-part) and sends it.
+    Handles both copying to a path and sending directly to Telegram.
+    Places files inside 'Artist - Album [Year]' directory within the zip.
+    """
+    # Determine source directory (assuming all tracks are in the same dir)
+    if not dl_tracks_info:
+        raise ValueError("No downloaded tracks provided for zipping.")
+
+    # Ensure all track dicts have 'download_dir' before accessing it
+    source_dir_str = None
+    for track in dl_tracks_info:
+        if "download_dir" in track:
+            source_dir_str = track["download_dir"]
+            break
+    if not source_dir_str:
+        raise ValueError(
+            "Could not determine source directory from downloaded tracks info."
+        )
+    source_dir = Path(source_dir_str)
+
+    cover_path = source_dir / "cover.jpg"  # Standardized cover name
+
+    # Write cover data to the source directory
+    try:
+        with open(cover_path, "wb") as f:
+            f.write(metadata["cover_data"])
+    except IOError as e:
+        print(f"Error writing cover file {cover_path}: {e}")
+        cover_path = None  # Proceed without cover
+    except TypeError as e:
+        print(
+            f"Error with cover data type: {e}. Cover data: {metadata.get('cover_data')}"
+        )
+        cover_path = None  # Proceed without cover
+
+    # --- Prepare Zip Contents ---
+    internal_dir_name = clean_filename(
+        f"{metadata['clean_artist']} - {metadata['clean_album_title']} [{metadata['year']}]"
     )
+    files_to_zip = {}  # {source_path: destination_in_zip}
+
+    if cover_path and cover_path.exists():
+        files_to_zip[str(cover_path)] = f"{internal_dir_name}/cover.jpg"
+    else:
+        print("Cover file not available or not written, skipping inclusion in zip.")
+
+    # Sort tracks by track number before adding to zip
+    try:
+        dl_tracks_info.sort(
+            key=lambda t: int(t.get("TRACK_NUMBER", "999"))
+            if str(t.get("TRACK_NUMBER", "999")).isdigit()
+            else 999
+        )
+    except Exception as sort_e:
+        print(
+            f"Warning: Could not sort tracks by track number for zipping. Proceeding in potentially unsorted order. Error: {sort_e}"
+        )
+
+    for i, track in enumerate(dl_tracks_info):
+        track_num_val = track.get("TRACK_NUMBER")
+        track_num_str = (
+            str(track_num_val).zfill(2)
+            if track_num_val and str(track_num_val).isdigit()
+            else str(i + 1).zfill(
+                2
+            )  # Fallback to index if track number missing/invalid
+        )
+        # Try to get artist/title from API metadata if available, fallback to download info
+        api_track = None
+        if "tracks_api_data" in metadata:
+            api_tracks_by_id = {
+                str(t.get("id", "")): t for t in metadata.get("tracks_api_data", [])
+            }
+            potential_id = Path(track.get("song_path", "")).stem
+            api_track = api_tracks_by_id.get(
+                track.get("SNG_ID")
+            ) or api_tracks_by_id.get(potential_id)
+
+        if api_track:
+            title = api_track.get(
+                "title", track.get("song_name", f"Track {track_num_str}")
+            )
+            artists = [c["name"] for c in api_track.get("contributors", [])]
+            if not artists:
+                artists = [metadata.get("artist", "Unknown Artist")]
+            artist_name = ", ".join(artists)
+        else:  # Fallback to info from download step
+            title = track.get("song_name", f"Track {track_num_str}")
+            artist_name = track.get("artist_name", "Unknown Artist")
+
+        file_format = track.get("file_format", get_file_extension())
+        song_path = track.get("song_path")
+
+        if not song_path or not Path(song_path).exists():
+            print(
+                f"Warning: Missing or non-existent 'song_path' for track {i} ('{title}'), skipping zip inclusion."
+            )
+            continue
+
+        # Use cleaned names for the file inside the zip
+        file_name_inside_zip = clean_filename(
+            f"{track_num_str} - {artist_name} - {title}.{file_format}"
+        )
+        destination_path = f"{internal_dir_name}/{file_name_inside_zip}"
+        files_to_zip[song_path] = destination_path
+        print(f"[Zip Prep] Mapping {song_path} -> {destination_path}")
+
+    # --- Handle Copy Mode vs Direct Send Mode ---
+    # Use album title for hash/naming if it's an album, otherwise track title
+    base_name_title = (
+        metadata["title"] if is_album else metadata["title"]
+    )  # Already correct contextually
+    final_title_for_hash = (
+        f"{metadata['artist']} - {base_name_title} [{metadata['year']}]"
+    )
+    caption = get_album_caption(metadata) if is_album else get_track_caption(metadata)
+
+    try:
+        # Send cover photo before zip/link
+        await event.answer_photo(
+            BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
+            caption=caption,
+            parse_mode="HTML",
+        )
+    except Exception as photo_e:
+        print(f"Error sending cover photo: {photo_e}")
+        # Send caption anyway if photo fails
+        await event.answer(
+            f"⚠️ Could not send cover image.\n{caption}", parse_mode="HTML"
+        )
+
+    if COPY_FILES_PATH and FILE_LINK_TEMPLATE:
+        # --- Copy Mode ---
+        print("Using Copy Mode for Zip")
+        md5_hash = hashlib.md5(final_title_for_hash.encode()).hexdigest()[:8]
+        # Use clean names for the zip filename itself
+        base_zip_name = f"{unidecode(metadata['clean_artist'])} - {unidecode(metadata['clean_title'])} ({md5_hash})"
+        safe_base_name = re.sub(r"[^.a-zA-Z0-9()_-]", "_", base_zip_name)
+        final_zip_path = Path(COPY_FILES_PATH) / f"{safe_base_name}.zip"
+        final_zip_path.parent.mkdir(parents=True, exist_ok=True)
+
+        print(f"Creating zip file at: {final_zip_path}")
+        try:
+            with ZipFile(final_zip_path, "w", ZIP_DEFLATED) as zipf:
+                for src, dest in files_to_zip.items():
+                    if Path(src).exists():
+                        zipf.write(src, dest)
+                        print(f"  Adding {src} as {dest}")
+                    else:
+                        print(f"  Warning: Source file not found, skipping: {src}")
+
+            file_link = FILE_LINK_TEMPLATE.format(quote(final_zip_path.name))
+            await event.answer(f"Download link: {file_link}")
+            print(f"Sent download link: {file_link}")
+
+        except Exception as e:
+            print(f"Error creating zip in copy mode: {e}")
+            await event.answer(f"❌ Error creating zip file: {e}")
+            if final_zip_path.exists():
+                try:
+                    final_zip_path.unlink()
+                except OSError:
+                    pass
+
+    else:
+        # --- Direct Send Mode ---
+        print("Using Direct Send Mode for Zip")
+        max_size_bytes = (
+            48 * 1024 * 1024
+        )  # Telegram's limit is 50MB, use 48MB as buffer
+        total_size = sum(
+            Path(f).stat().st_size for f in files_to_zip if Path(f).exists()
+        )
+        # Use clean names for the temporary zip file base name
+        output_base_path = Path(TMP_DIR) / clean_filename(
+            f"{metadata['clean_artist']} - {metadata['clean_title']} [{metadata['year']}]"
+        )
+        zip_files_created = []
+
+        if not files_to_zip:
+            print("No valid files found to add to the zip archive.")
+            await event.answer("❌ No files could be added to the zip archive.")
+            return  # Exit if nothing to zip
+
+        if total_size <= max_size_bytes:
+            # --- Single Zip File ---
+            zip_path = Path(f"{output_base_path}.zip")
+            print(
+                f"Creating single zip: {zip_path} (Total size: {total_size / (1024 * 1024):.2f} MB)"
+            )
+            try:
+                with ZipFile(zip_path, "w", ZIP_DEFLATED) as zipf:
+                    for src, dest in files_to_zip.items():
+                        if Path(src).exists():
+                            zipf.write(src, dest)
+                        else:
+                            print(f"  Warning: Source file not found, skipping: {src}")
+                zip_files_created.append(zip_path)
+            except Exception as e:
+                print(f"Error creating single zip: {e}")
+                await event.answer(f"❌ Error creating zip file: {e}")
+
+        else:
+            # --- Multi-part Zip ---
+            num_parts = math.ceil(total_size / max_size_bytes)
+            print(
+                f"Creating multi-part zip ({num_parts} parts estimate, Total size: {total_size / (1024 * 1024):.2f} MB)"
+            )
+            # Use the sorted list of (src, dest) items from files_to_zip dictionary
+            files_remaining = list(files_to_zip.items())
+            current_part = 1
+
+            while files_remaining:
+                zip_path = Path(f"{output_base_path}_part{current_part}.zip")
+                current_zip_size = 0
+                files_in_this_part = []
+                indices_processed_in_part = set()  # Track indices added to this part
+
+                try:
+                    with ZipFile(zip_path, "w", ZIP_DEFLATED) as zipf:
+                        # Iterate through remaining files to fill the current part
+                        for idx, (src, dest) in enumerate(files_remaining):
+                            if not Path(src).exists():
+                                print(f"  Skipping non-existent file: {src}")
+                                indices_processed_in_part.add(
+                                    idx
+                                )  # Mark as processed (skipped)
+                                continue
+
+                            file_size = Path(src).stat().st_size
+                            # Check if file itself is too large (should ideally not happen with audio)
+                            if file_size > max_size_bytes:
+                                print(
+                                    f"Error: File {src} ({file_size / (1024 * 1024):.2f} MB) exceeds max part size {max_size_bytes / (1024 * 1024):.2f} MB. Skipping."
+                                )
+                                indices_processed_in_part.add(
+                                    idx
+                                )  # Mark as processed (skipped)
+                                continue
+
+                            # Check if adding this file exceeds the limit for *this* part
+                            if current_zip_size + file_size <= max_size_bytes:
+                                zipf.write(src, dest)
+                                current_zip_size += file_size
+                                files_in_this_part.append((src, dest))
+                                indices_processed_in_part.add(
+                                    idx
+                                )  # Mark as added to this part
+                            else:
+                                # Cannot add this file to the current part, leave for the next
+                                continue
+
+                    # After iterating through all remaining files for the current part:
+                    if files_in_this_part:  # Only save the zip if files were added
+                        zip_files_created.append(zip_path)
+                        print(
+                            f"  Created part {current_part}: {zip_path.name} (Size: {current_zip_size / (1024 * 1024):.2f} MB, {len(files_in_this_part)} files)"
+                        )
+                    else:
+                        # If no files could be added (e.g., next file is too large), delete empty zip
+                        print(
+                            f"  Warning: Part {current_part} was not created (no files added)."
+                        )
+                        if zip_path.exists():
+                            zip_path.unlink()
+                        # Safety break: if no files were added and there are still files remaining, something is wrong
+                        if files_remaining and not indices_processed_in_part:
+                            print("Error: Stuck in multi-part zip creation. Aborting.")
+                            break
+
+                    # Remove the processed files from files_remaining *after* the loop
+                    # Iterate backwards to avoid index issues
+                    new_files_remaining = []
+                    for idx, item in enumerate(files_remaining):
+                        if idx not in indices_processed_in_part:
+                            new_files_remaining.append(item)
+                    files_remaining = new_files_remaining
+
+                    if not files_remaining:
+                        break  # All files processed
+
+                    current_part += 1
+                    # Safety break: prevent infinite loops if something goes wrong
+                    if current_part > num_parts * 1.5 + 1:  # Allow some leeway
+                        print(
+                            f"Error: Exceeded expected number of parts ({num_parts}). Aborting multi-part zip."
+                        )
+                        break
+
+                except Exception as e:
+                    print(f"Error creating zip part {current_part}: {e}")
+                    await event.answer(
+                        f"❌ Error creating zip part {current_part}: {e}"
+                    )
+                    if zip_path.exists():
+                        try:
+                            zip_path.unlink()
+                        except OSError:
+                            pass
+                    # Stop creating further parts if one fails critically
+                    break
+
+            # After loop, check if any files were left unprocessed
+            if files_remaining:
+                print(
+                    f"Warning: {len(files_remaining)} files could not be added to any zip part."
+                )
+                for src, dest in files_remaining:
+                    print(
+                        f"  - Unadded: {src} (Size: {Path(src).stat().st_size if Path(src).exists() else 'N/A'})"
+                    )
+
+        # --- Send Created Zip Files ---
+        if zip_files_created:
+            print(f"Sending {len(zip_files_created)} zip file(s)...")
+            num_sent = len(zip_files_created)
+            for idx, zip_file in enumerate(zip_files_created):
+                try:
+                    part_caption = (
+                        f"Zip Archive (Part {idx + 1}/{num_sent})"
+                        if num_sent > 1
+                        else "Zip Archive"
+                    )
+                    await event.answer_document(
+                        FSInputFile(zip_file),
+                        caption=part_caption,
+                        disable_notification=True,
+                    )
+                    print(f"Sent {zip_file.name}")
+                    await asyncio.sleep(0.5)  # Small delay between uploads
+                except Exception as e:
+                    print(f"Error sending zip file {zip_file.name}: {e}")
+                    await event.answer(f"❌ Error sending file: {zip_file.name}")
+        else:
+            print("No zip files were created or finalized to send.")
+            # Avoid sending error if copy mode was used (link was sent instead)
+            if not (COPY_FILES_PATH and FILE_LINK_TEMPLATE):
+                await event.answer("❌ Failed to create any zip files.")
+
+        # --- Cleanup Temporary Zip Files ---
+        print("Cleaning up temporary zip files...")
+        for zip_file in zip_files_created:
+            if zip_file.exists():
+                try:
+                    zip_file.unlink()
+                    print(f"  Removed {zip_file.name}")
+                except OSError as e:
+                    print(f"  Error removing {zip_file.name}: {e}")
 
 
-def get_audio_duration(file, path):
-    """Get the duration of the audio file."""
-    extension = os.path.splitext(path)[1]
-    if extension == ".mp3":
-        return int(MP3(file).info.length)
-    elif extension == ".flac":
-        return int(FLAC(file).info.length)
-    return 0
+# --- Message Handlers ---
 
 
 @deezer_router.message(F.text.regexp(TRACK_REGEX))
-async def get_track(event: types.Message, real_link=None):
-    print(event.from_user, event.text)
-    copy_text = real_link or event.text
-    while not copy_text.startswith("h"):
-        copy_text = copy_text[1:]
-    copy_text = copy_text.strip()
+async def handle_track_link(event: types.Message, real_link=None):
+    """Handles Deezer track links using imported utils and functions."""
+    user_id = event.from_user.id
+    print(f"User {user_id}: Received track link: {event.text}")
+    link_to_process = real_link or event.text.strip()
+    track_match = re.search(TRACK_REGEX, link_to_process)
+    if not track_match:
+        await event.answer("Invalid track link format.")
+        return
+    track_id = track_match.group(2)
 
-    if not is_downloading(event.from_user.id):
-        add_downloading(event.from_user.id)
-        tmp = copy_text.rstrip("/")
-        tmp_msg = await event.answer(__("downloading"))
+    # Use imported is_downloading and add_downloading
+    if is_downloading(user_id):
+        await event.answer(
+            __("running_download"), reply_markup=types.ReplyKeyboardRemove()
+        )
+        return
+
+    add_downloading(user_id)
+    # Use imported __ function
+    tmp_msg = await event.answer(__("downloading"))
+    download_dir_to_clean = None  # Store the path to clean up
+
+    try:
+        # Download the track
+        dl_track_info = await download_track(track_id)
+        if not dl_track_info or "song_path" not in dl_track_info:
+            raise ValueError("Track download failed or did not return path.")
+
+        # Store the directory path for cleanup *after* successful download
+        if "download_dir" in dl_track_info:
+            download_dir_to_clean = Path(dl_track_info["download_dir"])
+
+        # Fetch metadata (can happen after download)
+        metadata = get_track_metadata_from_api(track_id)
+
+        # Send based on format preference
+        if os.environ.get("FORMAT") == "zip":
+            await create_and_send_zip(event, metadata, [dl_track_info], is_album=False)
+        else:
+            await send_track_audio(event, metadata, dl_track_info)
+
+        await tmp_msg.delete()
+        # Delete the original user message after successful processing
         try:
-            dl = await download_track(tmp)
-            track_id = copy_text.split("/")[-1]
-            (
-                track_json,
-                cover,
-                artists,
-                release_date,
-                final_title,
-            ) = await get_track_info(track_id)
-            await send_track(
-                event, track_json, cover, artists, release_date, final_title, dl
-            )
-            await tmp_msg.delete()
-            await aioshutil.rmtree(os.path.dirname(dl.song_path))
-            zip_path = Path(TMP_DIR) / f"{final_title}.zip"
-            if os.path.exists(zip_path):
-                os.remove(zip_path)
-        except Exception as e:
-            print(e)
-            await tmp_msg.delete()
-            await event.answer(__("download_error") + " " + str(e))
-        finally:
+            await event.delete()
+            print(f"Deleted original message from user {user_id}")
+        except Exception as delete_e:
+            print(f"Could not delete original message: {delete_e}")
+
+    except Exception as e:
+        print(f"Error processing track {track_id}: {e}")
+        print(traceback.format_exc())
+        await tmp_msg.delete()
+        error_message = str(e) if str(e) else "An unknown error occurred."
+        # Use imported __ function
+        await event.answer(f"{__('download_error')} {error_message}")
+    finally:
+        # Use imported remove_downloading
+        remove_downloading(user_id)
+        # Cleanup the download directory if it was set
+        if download_dir_to_clean and download_dir_to_clean.exists():
             try:
-                remove_downloading(event.from_user.id)
-            except ValueError:
-                pass
-    else:
-        tmp_err_msg = await event.answer(__("running_download"))
-        await event.delete()
-        await asyncio.sleep(2)
-        await tmp_err_msg.delete()
+                print(f"Cleaning up download directory: {download_dir_to_clean}")
+                await aioshutil.rmtree(download_dir_to_clean)
+            except Exception as cleanup_e:
+                print(
+                    f"Error cleaning up directory {download_dir_to_clean}: {cleanup_e}"
+                )
 
 
 @deezer_router.message(F.text.regexp(ALBUM_REGEX))
-async def get_album(event: types.Message, real_link=None):
-    print(event.from_user, event.text)
-    copy_text = real_link or event.text
-    while not copy_text.startswith("h"):
-        copy_text = copy_text[1:]
-    copy_text = copy_text.strip()
+async def handle_album_link(event: types.Message, real_link=None):
+    """Handles Deezer album links using imported utils and functions."""
+    user_id = event.from_user.id
+    print(f"User {user_id}: Received album link: {event.text}")
+    link_to_process = real_link or event.text.strip()
+    album_match = re.search(ALBUM_REGEX, link_to_process)
+    if not album_match:
+        await event.answer("Invalid album link format.")
+        return
+    album_id = album_match.group(2)
 
-    if not is_downloading(event.from_user.id):
-        add_downloading(event.from_user.id)
-        tmp = copy_text.rstrip("/")
-        tmp_msg = await event.answer(__("downloading"))
-        try:
-            dl = await download_album(tmp)
-            album_id = copy_text.split("/")[-1]
-            (
-                album,
-                tracks,
-                cover,
-                titles,
-                artists,
-                release_date,
-                final_title,
-            ) = await get_album_info(album_id)
-
-            if os.environ.get("FORMAT") == "zip":
-                await send_album_zip(event, album, cover, release_date, final_title, dl)
-            else:
-                await send_album_audio(
-                    event, album, cover, titles, artists, release_date, dl
-                )
-
-            await tmp_msg.delete()
-            await aioshutil.rmtree(os.path.dirname(dl.tracks[0].song_path))
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
-            await tmp_msg.delete()
-            await event.answer(__("download_error") + " " + str(e))
-        finally:
-            try:
-                remove_downloading(event.from_user.id)
-            except ValueError:
-                pass
-    else:
-        tmp_err_msg = await event.answer(__("running_download"))
-        await event.delete()
-        await asyncio.sleep(2)
-        await tmp_err_msg.delete()
-
-
-async def send_album_zip(event, album, cover, release_date, final_title, dl):
-    songs_parent_dir = os.path.dirname(dl.tracks[0].song_path)
-    read_cover = cover.read()
-    with open(os.path.join(songs_parent_dir, "cover.jpg"), "wb") as cover_file:
-        cover_file.write(read_cover)
-
-    if COPY_FILES_PATH is not None and FILE_LINK_TEMPLATE is not None:
-        md5_hash = hashlib.md5(final_title.encode()).hexdigest()[:8]
-        zip_name = f"{unidecode(album['artist']['name'])} - {unidecode(album['title'])} ({md5_hash}).zip"
-        url_safe_zip_name = re.sub(r"[^.a-zA-Z0-9()_-]", "_", zip_name)
-
-        with ZipFile(
-            Path(COPY_FILES_PATH) / url_safe_zip_name, "w", ZIP_DEFLATED
-        ) as zipf:
-            for track in dl.tracks:
-                zipf.write(
-                    track.song_path, clean_filename(track.song_name) + track.file_format
-                )
-            zipf.write(os.path.join(songs_parent_dir, "cover.jpg"), "cover.jpg")
-
-        await event.answer_photo(
-            BufferedInputFile(read_cover, filename="cover.jpg"),
-            caption=get_album_caption(album, release_date),
-            parse_mode="HTML",
+    # Use imported is_downloading and add_downloading
+    if is_downloading(user_id):
+        await event.answer(
+            __("running_download"), reply_markup=types.ReplyKeyboardRemove()
         )
+        return
 
-        await event.answer(FILE_LINK_TEMPLATE.format(url_safe_zip_name))
-    else:
-        zip_files = create_multi_part_zip(
-            songs_parent_dir, Path(TMP_DIR) / final_title, dl.tracks
-        )
-        for zip_file in zip_files:
-            await event.answer_document(
-                FSInputFile(zip_file),
-                caption=get_album_caption(album, release_date),
-                parse_mode="HTML",
-            )
-
-        for zip_file in zip_files:
-            if os.path.exists(zip_file):
-                os.remove(zip_file)
-
-    await event.delete()
-
-
-async def send_album_audio(event, album, cover, titles, artists, release_date, dl):
-    read_cover = cover.read()
-    await event.answer_photo(
-        BufferedInputFile(read_cover, filename="cover.jpg"),
-        caption=get_album_caption(album, release_date),
-        parse_mode="HTML",
-    )
-    await event.delete()
+    add_downloading(user_id)
+    # Use imported __ function
+    tmp_msg = await event.answer(__("downloading"))
+    download_dir_to_clean = None  # Store the path to clean up
 
     try:
-        if 2 <= len(dl.tracks) <= 10:
-            await send_album_media_group(event, dl.tracks, titles, artists)
+        # Download the album tracks (with internal retries per track)
+        dl_tracks_info = await download_album(album_id)
+        if not dl_tracks_info:  # Check if *any* tracks were successfully downloaded
+            raise ValueError("Album download failed or returned no successful tracks.")
+
+        # Determine the download directory from the first successful track for cleanup
+        # All successful tracks should share the same base directory
+        if dl_tracks_info and "download_dir" in dl_tracks_info[0]:
+            download_dir_to_clean = Path(dl_tracks_info[0]["download_dir"])
         else:
-            raise TelegramNetworkError
-    except Exception:
-        await send_album_tracks_individually(event, dl.tracks, titles, artists)
+            print(
+                "Warning: Could not determine download directory for cleanup from track info."
+            )
+            # Attempt to construct the expected path as a fallback
+            download_dir_to_clean = Path(TMP_DIR) / "deezer" / "album" / str(album_id)
+
+        # Fetch album metadata (can happen after download)
+        metadata = get_album_metadata_from_api(album_id)
+
+        # Send based on format preference
+        if os.environ.get("FORMAT") == "zip":
+            await create_and_send_zip(event, metadata, dl_tracks_info, is_album=True)
+        else:
+            await send_album_audio(event, metadata, dl_tracks_info)
+
+        await tmp_msg.delete()
+        # Delete the original user message after successful processing
+        try:
+            await event.delete()
+            print(f"Deleted original message from user {user_id}")
+        except Exception as delete_e:
+            print(f"Could not delete original message: {delete_e}")
+
+    except Exception as e:
+        print(f"Error processing album {album_id}: {e}")
+        print(traceback.format_exc())
+        await tmp_msg.delete()
+        error_message = str(e) if str(e) else "An unknown error occurred."
+        # Use imported __ function
+        await event.answer(f"{__('download_error')} {error_message}")
+    finally:
+        # Use imported remove_downloading
+        remove_downloading(user_id)
+        # Cleanup the download directory if it was set or constructed
+        if download_dir_to_clean and download_dir_to_clean.exists():
+            try:
+                print(f"Cleaning up download directory: {download_dir_to_clean}")
+                await aioshutil.rmtree(download_dir_to_clean)
+            except Exception as cleanup_e:
+                print(
+                    f"Error cleaning up directory {download_dir_to_clean}: {cleanup_e}"
+                )
 
 
 @deezer_router.message(
     F.text.regexp(r"^https?://(?:www\.)?(?:deezer|dzr)\.page\.link/.*$")
 )
-async def get_shortlink(event: types.Message):
-    r = requests.get(event.text)
-    real_link = r.url.split("?")[0]
-    if re.match(TRACK_REGEX, real_link):
-        await get_track(event, real_link)
-    elif re.match(ALBUM_REGEX, real_link):
-        await get_album(event, real_link)
-    else:
-        print("Unknown link: " + real_link)
-        await event.answer(__("download_error"))
+async def handle_shortlink(event: types.Message):
+    """Handles Deezer shortlinks by resolving them, with improved SSL handling."""
+    user_id = event.from_user.id
+    print(f"User {user_id}: Received shortlink: {event.text}")
+    tmp_msg = await event.answer("🔗 Resolving shortlink...")
+    ssl_context = ssl.create_default_context(cafile=certifi.where())  # Use certifi CAs
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+
+    try:
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.head(
+                event.text.strip(), allow_redirects=True, timeout=15
+            ) as response:
+                real_link = str(response.url).split("?")[0]
+                print(f"Resolved shortlink to: {real_link}")
+
+        await tmp_msg.delete()
+
+        if re.match(TRACK_REGEX, real_link):
+            await handle_track_link(event, real_link)
+        elif re.match(ALBUM_REGEX, real_link):
+            await handle_album_link(event, real_link)
+        # Add playlist handling here if needed
+        # elif re.match(PLAYLIST_REGEX, real_link):
+        #     await handle_playlist_link(event, real_link)
+        else:
+            print("Unknown link type after resolving: " + real_link)
+            # Use imported __ function
+            await event.answer(
+                __("download_error") + " Unsupported link type after resolving."
+            )
+
+    except aiohttp.ClientConnectorCertificateError as e:
+        await tmp_msg.delete()
+        print(f"SSL Certificate Verification Error resolving {event.text}: {e}")
+        # Use imported __ function
+        await event.answer(
+            f"{__('resolve_error')} {__('ssl_error')}. Please check system certificates or network configuration."
+        )
+    except asyncio.TimeoutError:
+        await tmp_msg.delete()
+        print(f"Timeout resolving shortlink {event.text}")
+        # Use imported __ function
+        await event.answer(f"{__('resolve_error')} Timeout while resolving the link.")
+    except aiohttp.ClientError as e:
+        await tmp_msg.delete()
+        print(f"Error resolving shortlink {event.text}: {e}")
+        # Use imported __ function
+        await event.answer(f"{__('resolve_error')} Could not resolve shortlink: {e}")
+    except Exception as e:
+        await tmp_msg.delete()
+        print(f"Unexpected error handling shortlink {event.text}: {e}")
+        print(traceback.format_exc())
+        # Use imported __ function
+        await event.answer(f"{__('resolve_error')} Unexpected error: {e}")
+
+
+# --- Inline Query ---
 
 
 @deezer_router.inline_query()
-async def inline_echo(inline_query: InlineQuery):
+async def inline_search_handler(inline_query: InlineQuery):
+    """
+    Handles inline queries to search Deezer using the imported deezer_search function.
+    Runs the synchronous search function in an executor to avoid blocking.
+    """
+    query = inline_query.query.strip()
     items = []
+    # Use imported constant
+    search_type = TYPE_TRACK  # Default search type
 
-    if inline_query.query:
-        album = False
-        if inline_query.query.startswith("artist "):
-            album = True
-            tmp_text = 'artist:"{}"'.format(inline_query.query.split("artist ")[1])
-        elif inline_query.query.startswith("track "):
-            tmp_text = 'track:"{}"'.format(inline_query.query.split("track ")[1])
-        elif inline_query.query.startswith("album "):
-            album = True
-            tmp_text = 'album:"{}"'.format(inline_query.query.split("album ")[1])
-        else:
-            tmp_text = inline_query.query
-
-        text = API_SEARCH_TRK % quote(str(tmp_text))
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(text) as resp:
-                    r = await resp.json()
-
-                all_ids = []
-                tasks = []
-
-                for i in r["data"]:
-                    tmp_url = i["album"]["tracklist"]
-                    tmp_id = re.search("/album/(.*)/tracks", tmp_url).group(1)
-                    if not (album and tmp_id in all_ids):
-                        # Append tasks to the list in batches of 10
-                        tasks.append(fetch_album_data(session, tmp_id, i, album))
-                        if len(tasks) >= 10:
-                            batch_results = await asyncio.gather(*tasks)
-                            items.extend(batch_results)
-                            tasks.clear()  # Clear tasks after each batch
-
-                # Handle any remaining tasks (if less than 10)
-                if tasks:
-                    batch_results = await asyncio.gather(*tasks)
-                    items.extend(batch_results)
-
-        except KeyError:
-            pass
-        except AttributeError:
-            pass
-
-    await bot.answer_inline_query(inline_query.id, results=items, cache_time=300)
-
-
-async def fetch_album_data(session, tmp_id, track_data, album):
-    async with session.get(API_ALBUM % quote(str(tmp_id))) as album_resp:
-        tmp_album = await album_resp.json()
-
-    tmp_date = tmp_album["release_date"].split("-")
-    tmp_date = tmp_date[2] + "/" + tmp_date[1] + "/" + tmp_date[0]
-
-    if album:
-        title = track_data["album"]["title"]
-        tmp_input = InputTextMessageContent(
-            message_text=DEEZER_URL + "/album/%s" % quote(str(tmp_id))
+    if not query:
+        await bot.answer_inline_query(
+            inline_query.id,
+            results=[],
+            cache_time=300,
+            switch_pm_text="Type to search Deezer...",
+            switch_pm_parameter="inline_help",
         )
-        try:
-            nb = str(len(tmp_album["tracks"]["data"])) + " audio(s)"
-        except KeyError:
-            nb = ""
-        show_txt_album = " | " + nb + " (album)"
-    else:
-        show_txt_album = ""
-        tmp_input = InputTextMessageContent(message_text=track_data["link"])
-        title = track_data["title"]
+        return
 
-    result_id = str(track_data["id"])
-    item = InlineQueryResultArticle(
-        id=result_id,
-        title=title,
-        description=track_data["artist"]["name"] + " | " + tmp_date + show_txt_album,
-        thumb_url=track_data["album"]["cover_small"],
-        input_message_content=tmp_input,
+    # Determine search type based on prefixes (case-insensitive)
+    # Use imported constants
+    if query.lower().startswith("album:"):
+        search_type = TYPE_ALBUM
+        query = query[len("album:") :].strip()
+    elif query.lower().startswith("artist:"):
+        # Assuming deezer_search handles artist search within TYPE_TRACK or TYPE_ALBUM
+        search_type = TYPE_TRACK  # Or TYPE_ARTIST if deezer_search supports it
+        # query = query # Keep "artist: name" if deezer_search expects it
+        # query = query[len("artist:")].strip() # Or strip prefix if needed
+    elif query.lower().startswith("track:"):
+        search_type = TYPE_TRACK
+        query = query[len("track:") :].strip()
+
+    if not query:
+        await bot.answer_inline_query(inline_query.id, results=[], cache_time=300)
+        return
+
+    print(
+        f"Inline query: '{inline_query.query}', Parsed: query='{query}', type='{search_type}'"
     )
 
-    return item
+    try:
+        loop = asyncio.get_running_loop()
+        # Use imported deezer_search function
+        # Ensure deezer_search is thread-safe if it modifies shared state
+        search_results = await loop.run_in_executor(
+            None, functools.partial(deezer_search, query, search_type)
+        )
+
+        for item_data in search_results[:20]:  # Limit results sent
+            try:
+                result_id = item_data.get("id", None)
+                # Use imported constants
+                id_type = item_data.get(
+                    "id_type", TYPE_TRACK
+                )  # Assume track if missing
+                thumb_url = item_data.get("img_url", "")  # Use empty string if missing
+
+                if not result_id:
+                    print(f"Skipping item due to missing ID: {item_data}")
+                    continue
+
+                # Use imported constants
+                if id_type == TYPE_ALBUM:
+                    title = item_data.get("album", f"Album {result_id}")
+                    artist = item_data.get("artist", "Unknown Artist")
+                    description = f"Album by {artist}"
+                    link = DEEZER_URL + "/album/%s" % quote(str(result_id))
+                    inline_result_id = f"album_{result_id}"
+                elif id_type == TYPE_TRACK:
+                    title = item_data.get("title", f"Track {result_id}")
+                    artist = item_data.get("artist", "Unknown Artist")
+                    album_title = item_data.get("album", "")
+                    description = f"Track by {artist}"
+                    if album_title:
+                        description += f" - {album_title}"
+                    link = DEEZER_URL + "/track/%s" % quote(str(result_id))
+                    inline_result_id = f"track_{result_id}"
+                # Add handling for other types like Artist if deezer_search returns them
+                # elif id_type == TYPE_ARTIST:
+                #     title = item_data.get("artist", f"Artist {result_id}")
+                #     description = "Artist"
+                #     link = DEEZER_URL + "/artist/%s" % quote(str(result_id))
+                #     inline_result_id = f"artist_{result_id}"
+                else:
+                    print(f"Skipping item with unhandled id_type: {id_type}")
+                    continue
+
+                article = InlineQueryResultArticle(
+                    id=inline_result_id,
+                    title=title,
+                    description=description,
+                    thumb_url=thumb_url if thumb_url else None,  # Pass None if empty
+                    input_message_content=InputTextMessageContent(message_text=link),
+                )
+                items.append(article)
+            except Exception as item_e:
+                print(
+                    f"Error processing individual search result item {item_data.get('id', 'N/A')}: {item_e}"
+                )
+
+    # Handle potential DeezerApiException from deezer_search
+    except DeezerApiException as e:
+        print(f"Deezer API exception during search: {e}")
+        print(traceback.format_exc())
+        # Use imported __ function
+        await bot.answer_inline_query(
+            inline_query.id,
+            results=[],
+            cache_time=10,
+            switch_pm_text=__("search_error"),
+            switch_pm_parameter="search_error_api",
+        )
+        return
+    except Exception as e:
+        print(f"Error running or processing deezer_search: {e}")
+        print(traceback.format_exc())
+        # Use imported __ function
+        await bot.answer_inline_query(
+            inline_query.id,
+            results=[],
+            cache_time=10,
+            switch_pm_text=__("search_error"),
+            switch_pm_parameter="search_error_generic",
+        )
+        return
+
+    try:
+        # Use imported bot instance
+        await bot.answer_inline_query(inline_query.id, results=items, cache_time=300)
+    except Exception as e:
+        # Catch potential Telegram API errors during sending results
+        print(f"Error sending inline query results to Telegram: {e}")
+        # Optionally, try sending an empty result set as a fallback
+        try:
+            await bot.answer_inline_query(inline_query.id, results=[], cache_time=10)
+        except Exception as fallback_e:
+            print(f"Error sending fallback empty inline query results: {fallback_e}")

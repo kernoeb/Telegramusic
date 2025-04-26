@@ -14,14 +14,10 @@ from handlers.deezer import deezer_router
 from handlers.youtube import youtube_router
 from utils import TMP_DIR
 
-if (
-    sys.version_info.major != 3
-    or sys.version_info.minor != 9
-    or sys.version_info.micro != 18
-):
+if sys.version_info.major != 3 or sys.version_info.minor != 13:
     print(
-        "Python 3.9.18 is required, but you are using Python {}.{}.{}".format(
-            sys.version_info.major, sys.version_info.minor, sys.version_info.micro
+        "Python 3.13 is required, but you are using Python {}.{}".format(
+            sys.version_info.major, sys.version_info.minor
         )
     )
     sys.exit(1)

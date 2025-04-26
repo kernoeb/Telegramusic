@@ -1,4 +1,4 @@
-FROM python:3.9.18-alpine3.19
+FROM python:3.13-alpine3.21
 
 RUN apk add --no-cache ffmpeg alpine-sdk python3-dev py3-setuptools tiff-dev jpeg-dev openjpeg-dev zlib-dev freetype-dev lcms2-dev \
     libwebp-dev tcl-dev tk-dev harfbuzz-dev fribidi-dev libimagequant-dev \
