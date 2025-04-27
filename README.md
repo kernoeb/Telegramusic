@@ -156,6 +156,8 @@ FORMAT=zip
 
 ### Debugging
 
+> docker logs telegramusic 2>/dev/null | grep "USER_DEBUG"
+
 ```bash
 grep "USER_DEBUG"                     # All user activities
 grep "USER_DEBUG.*user_id=123456789"  # Activities for specific user ID
