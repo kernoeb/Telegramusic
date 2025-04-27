@@ -47,8 +47,7 @@ Search for music in `inline mode` :
 
 ![image](https://user-images.githubusercontent.com/24623168/141983477-b7692d78-134a-4176-98ba-d6388ac4b80b.png)
 
-or send a Deezer / YouTube / Soundcloud link
-
+or send a Deezer / YouTube / SoundCloud link
 ----
 
 ## Configuration
