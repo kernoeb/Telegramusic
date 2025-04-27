@@ -4,7 +4,7 @@
   <br>
 </h1>
 
-<h4 align="center">A Telegram bot to download music from Deezer and YouTube</h4>
+<h4 align="center">A Telegram bot to download music from Deezer, YouTube and SoundCloud</h4>
 
 <p align="center">
 <a href="https://heroku.com/deploy?template=https://github.com/kernoeb/Telegramusic">
@@ -47,7 +47,7 @@ Search for music in `inline mode` :
 
 ![image](https://user-images.githubusercontent.com/24623168/141983477-b7692d78-134a-4176-98ba-d6388ac4b80b.png)
 
-or send a Deezer / YouTube link
+or send a Deezer / YouTube / Soundcloud link
 
 ----
 

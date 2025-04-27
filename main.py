@@ -11,7 +11,7 @@ from aiogram.filters import Command
 
 from bot import bot, dp
 from handlers.deezer import deezer_router
-from handlers.youtube import youtube_router
+from handlers.yt_dlp import youtube_router, soundcloud_router
 from utils import TMP_DIR
 
 if sys.version_info.major != 3 or sys.version_info.minor != 13:
@@ -64,7 +64,7 @@ async def help_start(event: types.Message):
 
 
 async def main() -> None:
-    dp.include_routers(youtube_router, deezer_router)
+    dp.include_routers(youtube_router, soundcloud_router, deezer_router)
     await dp.start_polling(bot)
 
 
