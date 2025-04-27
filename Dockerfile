@@ -9,9 +9,6 @@ WORKDIR /usr/src/app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# For debugging/logging
-ENV PYTHONUNBUFFERED=0
-
 COPY dl_utils dl_utils
 COPY handlers handlers
 COPY langs.json ./
@@ -31,4 +28,4 @@ RUN if [ "$ENABLE_FLAC" = "0" ]; then \
       echo "FLAC : enabled"; \
     fi
 
-CMD [ "python", "./main.py" ]
+CMD [ "python", "-u", "main.py" ]
