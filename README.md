@@ -14,13 +14,13 @@
 
 ## Disclaimer
 
-:warning: For educational purposes only (or for free music)    
-Please don't use this for illegal stuff.  
+:warning: For educational purposes only (or for free music)
+Please don't use this for illegal stuff.
 It's **against Deezer's terms of service**.
 
 ## Information
 
-You should probably use Docker way to install the bot, or follow the steps listed in the Dockerfile.  
+You should probably use Docker way to install the bot, or follow the steps listed in the Dockerfile.
 As indicated in the Dockerfile there's a temporary patch to avoid the "FLAC issue" from the deezer download library,
 and another one to allow downloading albums with more than 25 tracks.
 
@@ -35,7 +35,7 @@ Your native language is not in the `langs.json` file ? Just make a pull request 
 - Create a bot on Telegram and grab a token with [Bot Father](https://t.me/botfather) (`TELEGRAM_TOKEN`)
 - Activate `Inline Mode` on BotFather for the bot you just created
 
-----
+---
 
 Search for music in `inline mode` :
 
@@ -47,8 +47,7 @@ Search for music in `inline mode` :
 
 ![image](https://user-images.githubusercontent.com/24623168/141983477-b7692d78-134a-4176-98ba-d6388ac4b80b.png)
 
-or send a Deezer / YouTube / SoundCloud link
-----
+## or send a Deezer / YouTube / SoundCloud link
 
 ## Configuration
 
@@ -131,10 +130,10 @@ ENABLE_FLAC=1
 
 ### Troubleshooting
 
-> "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."  
+> "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."
 > Please note that your account may be banned if you use this feature.
 
-Add a `cookies.txt` in `./local_resources`.  
+Add a `cookies.txt` in `./local_resources`.
 To generate this file, please see : https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp.
 
 You don't need to restart the bot, it will automatically reload the cookies when downloading a YouTube video.
@@ -153,4 +152,13 @@ TELEGRAM_TOKEN=1234567890:ABCDEFghijklmnopqrstuvwxyz012345678
 COPY_FILES_PATH=/files
 FILE_LINK_TEMPLATE=https://example.com/dl/{0}
 FORMAT=zip
+```
+
+### Debugging
+
+```bash
+grep "USER_DEBUG"                     # All user activities
+grep "USER_DEBUG.*user_id=123456789"  # Activities for specific user ID
+grep "USER_DEBUG.*username=john"      # Activities for specific username
+grep "USER_DEBUG.*Error"              # All user-related errors
 ```

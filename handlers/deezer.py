@@ -486,6 +486,11 @@ def get_album_caption(metadata):
 
 async def send_track_audio(event: types.Message, metadata, dl_track_info):
     """Sends a single track as an audio file."""
+    user_id = event.from_user.id
+    username = event.from_user.username
+    first_name = event.from_user.first_name
+    print(f"USER_DEBUG: Sending track audio to user_id={user_id} username={username} first_name={first_name}")
+
     caption = get_track_caption(metadata)
     song_path = dl_track_info["song_path"]
     duration = get_audio_duration(song_path)
@@ -509,6 +514,11 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
 
 async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
     """Sends album tracks as audio files (individually or as media group)."""
+    user_id = event.from_user.id
+    username = event.from_user.username
+    first_name = event.from_user.first_name
+    print(f"USER_DEBUG: Sending album audio to user_id={user_id} username={username} first_name={first_name}")
+    
     caption = get_album_caption(metadata)
 
     # Send cover photo first
@@ -596,8 +606,9 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
     print(
         f"Sending album {metadata['id']} tracks individually ({len(processed_files)} items)"
     )
-    for item in processed_files:
+    for i, item in enumerate(processed_files):
         try:
+            print(f"USER_DEBUG: Sending individual track {i+1}/{len(processed_files)} to user_id={user_id} username={username} first_name={first_name}")
             # Use BufferedInputFile for individual sending to avoid potential issues with FSInputFile reuse
             with open(item["path"], "rb") as f:
                 audio_data = f.read()
@@ -625,6 +636,10 @@ async def create_and_send_zip(
     Handles both copying to a path and sending directly to Telegram.
     Places files inside 'Artist - Album [Year]' directory within the zip.
     """
+    user_id = event.from_user.id
+    username = event.from_user.username
+    first_name = event.from_user.first_name
+    print(f"USER_DEBUG: Creating and sending zip to user_id={user_id} username={username} first_name={first_name} is_album={is_album}")
     # Determine source directory (assuming all tracks are in the same dir)
     if not dl_tracks_info:
         raise ValueError("No downloaded tracks provided for zipping.")
@@ -773,6 +788,7 @@ async def create_and_send_zip(
                         print(f"  Warning: Source file not found, skipping: {src}")
 
             file_link = FILE_LINK_TEMPLATE.format(quote(final_zip_path.name))
+            print(f"USER_DEBUG: Sending download link to user_id={user_id} username={username} first_name={first_name}")
             await event.answer(f"Download link: {file_link}")
             print(f"Sent download link: {file_link}")
 
@@ -944,6 +960,7 @@ async def create_and_send_zip(
                         if num_sent > 1
                         else "Zip Archive"
                     )
+                    print(f"USER_DEBUG: Sending zip file {idx+1}/{num_sent} to user_id={user_id} username={username} first_name={first_name}")
                     await event.answer_document(
                         FSInputFile(zip_file),
                         caption=part_caption,
@@ -978,6 +995,9 @@ async def create_and_send_zip(
 async def handle_track_link(event: types.Message, real_link=None):
     """Handles Deezer track links using imported utils and functions."""
     user_id = event.from_user.id
+    username = event.from_user.username
+    first_name = event.from_user.first_name
+    print(f"USER_DEBUG: Track link request from user_id={user_id} username={username} first_name={first_name}")
     print(f"User {user_id}: Received track link: {event.text}")
     link_to_process = real_link or event.text.strip()
     track_match = re.search(TRACK_REGEX, link_to_process)
@@ -987,6 +1007,7 @@ async def handle_track_link(event: types.Message, real_link=None):
     track_id = track_match.group(2)
 
     if is_downloading(user_id):
+        print(f"USER_DEBUG: Rejected download request from user_id={user_id} username={username} first_name={first_name} - already downloading")
         await event.answer(
             __("running_download"), reply_markup=types.ReplyKeyboardRemove()
         )
@@ -1020,11 +1041,13 @@ async def handle_track_link(event: types.Message, real_link=None):
         # Delete the original user message after successful processing
         try:
             await event.delete()
+            print(f"USER_DEBUG: Deleted original message from user_id={user_id} username={username} first_name={first_name}")
             print(f"Deleted original message from user {user_id}")
         except Exception as delete_e:
             print(f"Could not delete original message: {delete_e}")
 
     except Exception as e:
+        print(f"USER_DEBUG: Error processing track download for user_id={user_id} username={username} first_name={first_name}: {e}")
         print(f"Error processing track {track_id}: {e}")
         print(traceback.format_exc())
         await tmp_msg.delete()
@@ -1047,6 +1070,9 @@ async def handle_track_link(event: types.Message, real_link=None):
 async def handle_album_link(event: types.Message, real_link=None):
     """Handles Deezer album links using imported utils and functions."""
     user_id = event.from_user.id
+    username = event.from_user.username
+    first_name = event.from_user.first_name
+    print(f"USER_DEBUG: Album link request from user_id={user_id} username={username} first_name={first_name}")
     print(f"User {user_id}: Received album link: {event.text}")
     link_to_process = real_link or event.text.strip()
     album_match = re.search(ALBUM_REGEX, link_to_process)
@@ -1056,6 +1082,7 @@ async def handle_album_link(event: types.Message, real_link=None):
     album_id = album_match.group(2)
 
     if is_downloading(user_id):
+        print(f"USER_DEBUG: Rejected album download request from user_id={user_id} username={username} first_name={first_name} - already downloading")
         await event.answer(
             __("running_download"), reply_markup=types.ReplyKeyboardRemove()
         )
@@ -1095,11 +1122,13 @@ async def handle_album_link(event: types.Message, real_link=None):
         # Delete the original user message after successful processing
         try:
             await event.delete()
+            print(f"USER_DEBUG: Deleted original message from user_id={user_id} username={username} first_name={first_name}")
             print(f"Deleted original message from user {user_id}")
         except Exception as delete_e:
             print(f"Could not delete original message: {delete_e}")
 
     except Exception as e:
+        print(f"USER_DEBUG: Error processing album download for user_id={user_id} username={username} first_name={first_name}: {e}")
         print(f"Error processing album {album_id}: {e}")
         print(traceback.format_exc())
         await tmp_msg.delete()
@@ -1124,6 +1153,9 @@ async def handle_album_link(event: types.Message, real_link=None):
 async def handle_shortlink(event: types.Message):
     """Handles Deezer shortlinks by resolving them, with improved SSL handling."""
     user_id = event.from_user.id
+    username = event.from_user.username
+    first_name = event.from_user.first_name
+    print(f"USER_DEBUG: Shortlink request from user_id={user_id} username={username} first_name={first_name}")
     print(f"User {user_id}: Received shortlink: {event.text}")
     tmp_msg = await event.answer("🔗 Resolving shortlink...")
     ssl_context = ssl.create_default_context(cafile=certifi.where())  # Use certifi CAs
@@ -1182,7 +1214,12 @@ async def inline_search_handler(inline_query: InlineQuery):
     Handles inline queries to search Deezer using the imported deezer_search function.
     Runs the synchronous search function in an executor to avoid blocking.
     """
+    user_id = inline_query.from_user.id
+    username = inline_query.from_user.username
+    first_name = inline_query.from_user.first_name
     query = inline_query.query.strip()
+    print(f"USER_DEBUG: Inline search from user_id={user_id} username={username} first_name={first_name} query='{query}'")
+    
     items = []
     search_type = TYPE_TRACK  # Default search type
 
