@@ -39,11 +39,11 @@ from dl_utils.deezer_download import (
     init_deezer_session,
     get_song_infos_from_deezer_website,
     download_song,
-    get_file_extension,
     deezer_search,
     TYPE_TRACK,
     TYPE_ALBUM,
     DeezerApiException,
+    get_file_format,
 )
 
 
@@ -56,6 +56,7 @@ class TelegramNetworkError(Exception):
 
 DEFAULT_QUALITY = "flac" if os.environ.get("ENABLE_FLAC") == "1" else "mp3"
 print("Default quality: " + DEFAULT_QUALITY)
+init_deezer_session("", DEFAULT_QUALITY)
 
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 5))
 print("Max retries: " + str(MAX_RETRIES))
@@ -76,7 +77,6 @@ FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
 async def download_track(track_id, retries=MAX_RETRIES):
     """Downloads a single track from Deezer using imported functions."""
-    init_deezer_session("", DEFAULT_QUALITY)
     for attempt in range(retries):
         try:
             # Fetch track metadata from Deezer website (may include download details)
@@ -91,16 +91,18 @@ async def download_track(track_id, retries=MAX_RETRIES):
                         f"Failed to get track info for {track_id} after {retries} attempts."
                     )
 
+            file_extension, deezer_format = get_file_format(track_infos)
+
             # Create a temporary directory for this track
             tmp_track_base_dir = Path(TMP_DIR) / "deezer" / "track" / str(track_id)
             tmp_track_base_dir.mkdir(parents=True, exist_ok=True)
 
             # Determine the expected final file path within our base dir
-            song_path = tmp_track_base_dir / f"{track_id}.{get_file_extension()}"
+            song_path = tmp_track_base_dir / f"{track_id}{file_extension}"
 
             # Perform the actual download
             download_song(
-                track_infos, str(song_path)
+                track_infos, deezer_format, str(song_path)
             )  # download_song expects string path
 
             # Check if download was successful (e.g., file exists and has size)
@@ -117,7 +119,7 @@ async def download_track(track_id, retries=MAX_RETRIES):
             track_infos["song_path"] = str(song_path)  # Store as string
             track_infos["song_name"] = track_infos.get("SNG_TITLE", f"Track {track_id}")
             track_infos["artist_name"] = track_infos.get("ART_NAME", "Unknown Artist")
-            track_infos["file_format"] = get_file_extension()
+            track_infos["file_extension"] = file_extension
             track_infos["download_dir"] = str(tmp_track_base_dir)  # Store base dir path
             # Carry over track number if present in original info
             if "TRACK_NUMBER" in track_infos:
@@ -153,7 +155,6 @@ async def download_track(track_id, retries=MAX_RETRIES):
 
 async def download_album(album_id, retries=MAX_RETRIES):
     """Downloads all tracks from a Deezer album using imported functions, with per-track retries."""
-    init_deezer_session("", DEFAULT_QUALITY)
     album_info_attempt = 0
     album_tracks_infos = None
     tmp_download_dir = None  # Define outside the loop for cleanup
@@ -205,8 +206,9 @@ async def download_album(album_id, retries=MAX_RETRIES):
     # Prepare download tasks for each track
     for i, track_infos in enumerate(album_tracks_infos):
         track_sng_id = track_infos.get("SNG_ID", f"album_{album_id}_track_{i}")
+        file_extension, deezer_format = get_file_format(track_infos)
         # Define the final path within the album's download directory
-        song_path = tmp_download_dir / f"{track_sng_id}.{get_file_extension()}"
+        song_path = tmp_download_dir / f"{track_sng_id}{file_extension}"
 
         # Create a closure to capture loop variables correctly for async task
         # This inner function now includes the retry logic for a single track
@@ -215,7 +217,9 @@ async def download_album(album_id, retries=MAX_RETRIES):
             for attempt in range(track_retries):
                 try:
                     # Ensure download_song doesn't create its own conflicting temp dirs if possible
-                    download_song(ti, str(sp))  # download_song expects string path
+                    download_song(
+                        ti, deezer_format, str(sp)
+                    )  # download_song expects string path
 
                     if not sp.exists() or sp.stat().st_size == 0:
                         # Clean up potentially empty file before retrying
@@ -233,7 +237,7 @@ async def download_album(album_id, retries=MAX_RETRIES):
                         "SNG_TITLE", f"Track {track_sng_id}"
                     )
                     ti_copy["artist_name"] = ti_copy.get("ART_NAME", "Unknown Artist")
-                    ti_copy["file_format"] = get_file_extension()
+                    ti_copy["file_extension"] = file_extension
                     # Keep track number if available
                     if "TRACK_NUMBER" in ti:
                         ti_copy["TRACK_NUMBER"] = ti["TRACK_NUMBER"]
@@ -559,7 +563,7 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
 
         media_item = InputMediaAudio(
             media=file_input,
-            filename=f"{clean_filename(performer)} - {clean_filename(title)}.{dl_info['file_format']}",
+            filename=f"{clean_filename(performer)} - {clean_filename(title)}{dl_info['file_extension']}",
             title=title,
             performer=performer,
             duration=duration,
@@ -571,7 +575,7 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
                 "title": title,
                 "performer": performer,
                 "duration": duration,
-                "format": dl_info["file_format"],
+                "extension": dl_info["file_extension"],
             }
         )
 
@@ -600,7 +604,7 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
             await event.answer_audio(
                 BufferedInputFile(
                     audio_data,
-                    filename=f"{clean_filename(item['performer'])} - {clean_filename(item['title'])}.{item['format']}",
+                    filename=f"{clean_filename(item['performer'])} - {clean_filename(item['title'])}{item['extension']}",
                 ),
                 title=item["title"],
                 performer=item["performer"],
@@ -707,7 +711,7 @@ async def create_and_send_zip(
             title = track.get("song_name", f"Track {track_num_str}")
             artist_name = track.get("artist_name", "Unknown Artist")
 
-        file_format = track.get("file_format", get_file_extension())
+        file_extension = track.get("file_extension")
         song_path = track.get("song_path")
 
         if not song_path or not Path(song_path).exists():
@@ -718,7 +722,7 @@ async def create_and_send_zip(
 
         # Use cleaned names for the file inside the zip
         file_name_inside_zip = clean_filename(
-            f"{track_num_str} - {artist_name} - {title}.{file_format}"
+            f"{track_num_str} - {artist_name} - {title}{file_extension}"
         )
         destination_path = f"{internal_dir_name}/{file_name_inside_zip}"
         files_to_zip[song_path] = destination_path
@@ -1212,7 +1216,6 @@ async def inline_search_handler(inline_query: InlineQuery):
     )
 
     try:
-        init_deezer_session("", DEFAULT_QUALITY)
         loop = asyncio.get_running_loop()
         search_results = await loop.run_in_executor(
             None, functools.partial(deezer_search, query, search_type)

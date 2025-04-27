@@ -1,8 +1,12 @@
+# From https://github.com/kmille/deezer-downloader/blob/master/deezer_downloader/deezer.py
+# MIT License
+
+from __future__ import annotations
+
 import os
-import sys
 import re
 import json
-
+from typing import Any
 
 from Crypto.Hash import MD5
 from Crypto.Cipher import Blowfish
@@ -26,24 +30,22 @@ sound_format = ""
 USER_AGENT = "Mozilla/5.0 (X11; Linux i686; rv:135.0) Gecko/20100101 Firefox/135.0"
 
 
-def get_user_data() -> tuple[str, str]:
+def get_user_data() -> tuple[Any, Any] | None:
     try:
         user_data = session.get(
             "https://www.deezer.com/ajax/gw-light.php?method=deezer.getUserData&input=3&api_version=1.0&api_token="
         )
         user_data_json = user_data.json()["results"]
         options = user_data_json["USER"]["OPTIONS"]
-        license_token = options["license_token"]
-        web_sound_quality = options["web_sound_quality"]
-        print(license_token, web_sound_quality)
-        return license_token, web_sound_quality
+        return options["license_token"], options["web_sound_quality"]
     except (requests.exceptions.RequestException, KeyError) as e:
         print(f"ERROR: Could not get license token: {e}")
+        return None
 
 
 # quality_config comes from config file
 # web_sound_quality is a dict coming from Deezer API and depends on ARL cookie (premium subscription)
-def set_song_quality(quality_config: str, web_sound_quality: dict):
+def set_default_song_quality(quality_config: str, web_sound_quality: dict):
     global sound_format
     flac_supported = web_sound_quality["lossless"] is True
     if flac_supported:
@@ -59,17 +61,31 @@ def set_song_quality(quality_config: str, web_sound_quality: dict):
         sound_format = "MP3_128"
 
 
-def get_file_extension() -> str:
-    return "flac" if sound_format == "FLAC" else "mp3"
+def get_file_format(s: dict) -> tuple[str, str]:
+    if sound_format == "FLAC":
+        if int(s.get("FILESIZE_FLAC", 0)) > 0:
+            return ".flac", "FLAC"
+        elif int(s.get("FILESIZE_MP3_320", 0)) > 0:
+            print("Debug: FLAC not available, falling back to MP3_320")
+            return ".mp3", "MP3_320"
+        else:
+            print("Debug: FLAC and MP3_320 not available, falling back to MP3_128")
+            return ".mp3", "MP3_128"
+
+    if sound_format == "MP3_320":
+        if int(s.get("FILESIZE_MP3_320", 0)) > 0:
+            return ".mp3", "MP3_320"
+        else:
+            print("Debug: MP3_320 not available, falling back to MP3_128")
+            return ".mp3", "MP3_128"
+
+    # Default
+    return ".mp3", "MP3_128"
 
 
 # quality is mp3 or flac
 def init_deezer_session(proxy_server: str, quality: str) -> None:
-    global session, license_token, web_sound_quality
-    if session is not None:
-        print("Session already initialized")
-        return
-
+    global session, license_token
     header = {
         "Pragma": "no-cache",
         "Origin": "https://www.deezer.com",
@@ -91,7 +107,7 @@ def init_deezer_session(proxy_server: str, quality: str) -> None:
         print(f"Using proxy {proxy_server}")
         session.proxies.update({"https": proxy_server})
     license_token, web_sound_quality = get_user_data()
-    set_song_quality(quality, web_sound_quality)
+    set_default_song_quality(quality, web_sound_quality)
 
 
 class Deezer404Exception(Exception):
@@ -394,7 +410,7 @@ def writeid3v2(fo, song):
     fo.write(id3data)
 
 
-def get_song_url(track_token: str, quality: int = 3) -> str:
+def get_song_url(track_token: str, format: str) -> str:
     try:
         response = requests.post(
             "https://media.deezer.com/v1/get_url",
@@ -403,9 +419,7 @@ def get_song_url(track_token: str, quality: int = 3) -> str:
                 "media": [
                     {
                         "type": "FULL",
-                        "formats": [
-                            {"cipher": "BF_CBC_STRIPE", "format": sound_format}
-                        ],
+                        "formats": [{"cipher": "BF_CBC_STRIPE", "format": format}],
                     }
                 ],
                 "track_tokens": [
@@ -428,7 +442,7 @@ def get_song_url(track_token: str, quality: int = 3) -> str:
     return url
 
 
-def download_song(song: dict, output_file: str) -> None:
+def download_song(song: dict, deezer_format: str, output_file: str) -> None:
     # downloads and decrypts the song from Deezer. Adds ID3 and art cover
     # song: dict with information of the song (grabbed from Deezer.com)
     # output_file: absolute file name of the output file
@@ -436,7 +450,7 @@ def download_song(song: dict, output_file: str) -> None:
     assert type(output_file) is str, "output_file must be a str"
 
     try:
-        url = get_song_url(song["TRACK_TOKEN"])
+        url = get_song_url(song["TRACK_TOKEN"], deezer_format)
     except Exception as e:
         print(
             f"Could not download song (https://www.deezer.com/us/track/{song['SNG_ID']}). Maybe it's not available anymore or at least not in your country. {e}"
@@ -447,7 +461,7 @@ def download_song(song: dict, output_file: str) -> None:
                 f"Trying fallback song https://www.deezer.com/us/track/{song['SNG_ID']}"
             )
             try:
-                url = get_song_url(song["TRACK_TOKEN"])
+                url = get_song_url(song["TRACK_TOKEN"], deezer_format)
             except Exception:
                 pass
             else:
@@ -590,11 +604,3 @@ def test_deezer_login():
     else:
         print("Login is not working anymore.")
         return False
-
-
-if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "check-login":
-        init_deezer_session("", "mp3")
-        test_deezer_login()
-        song = get_song_infos_from_deezer_website("track", "92560998")
-        download_song(song, "/tmp/test.mp3")
