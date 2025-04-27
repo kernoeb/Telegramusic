@@ -6,27 +6,15 @@
 
 <h4 align="center">A Telegram bot to download music from Deezer, YouTube and SoundCloud</h4>
 
-<p align="center">
-<a href="https://heroku.com/deploy?template=https://github.com/kernoeb/Telegramusic">
-  <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy">
-</a>
-</p>
-
 ## Disclaimer
 
 :warning: For educational purposes only (or for free music)
 Please don't use this for illegal stuff.
 It's **against Deezer's terms of service**.
 
-## Information
-
-You should probably use Docker way to install the bot, or follow the steps listed in the Dockerfile.
-As indicated in the Dockerfile there's a temporary patch to avoid the "FLAC issue" from the deezer download library,
-and another one to allow downloading albums with more than 25 tracks.
-
 ## Translations
 
-Your native language is not in the `langs.json` file ? Just make a pull request or pm me !
+Your native language is not in the `langs.json` file ? Just make a pull request or send me a message !
 
 ## Usage
 
@@ -78,8 +66,8 @@ BOT_LANG=fr
 ### Local usage
 
 - Add `DEEZER_TOKEN` and `TELEGRAM_TOKEN` as variable environment
-- python3.9 -m pip install -r requirements.txt
-- python3.9 main.py
+- python3.13 -m pip install -r requirements.txt
+- python3.13 main.py
 
 > You should use a `venv` to avoid conflicts with your system python packages
 
