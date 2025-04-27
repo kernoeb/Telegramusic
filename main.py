@@ -14,7 +14,7 @@ from handlers.deezer import deezer_router
 from handlers.yt_dlp import youtube_router, soundcloud_router
 from utils import TMP_DIR
 
-if sys.version_info.major != 3 or sys.version_info.minor != 13:
+if sys.version_info < (3, 13):
     print(
         "Python 3.13 is required, but you are using Python {}.{}".format(
             sys.version_info.major, sys.version_info.minor
