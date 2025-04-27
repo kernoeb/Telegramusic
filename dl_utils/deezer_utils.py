@@ -5,7 +5,7 @@ from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 
 
-def clean_filename(filename):
+def clean_filename(filename: str) -> str:
     """
     Cleans a string to be suitable for use as a filename or directory name.
     Removes or replaces potentially problematic characters.
@@ -22,7 +22,7 @@ def clean_filename(filename):
     return cleaned
 
 
-def get_audio_duration(file_path):
+def get_audio_duration(file_path: str) -> int:
     """Get the duration of the audio file."""
     try:
         extension = os.path.splitext(file_path)[1].lower()

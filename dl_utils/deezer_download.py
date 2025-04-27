@@ -31,6 +31,9 @@ USER_AGENT = "Mozilla/5.0 (X11; Linux i686; rv:135.0) Gecko/20100101 Firefox/135
 
 
 def get_user_data() -> tuple[Any, Any] | None:
+    if not session:
+        raise DeezerApiException("Error: Deezer session not initialized")
+
     try:
         user_data = session.get(
             "https://www.deezer.com/ajax/gw-light.php?method=deezer.getUserData&input=3&api_version=1.0&api_token="
@@ -86,6 +89,12 @@ def get_file_format(s: dict) -> tuple[str, str]:
 # quality is mp3 or flac
 def init_deezer_session(proxy_server: str, quality: str) -> None:
     global session, license_token
+
+    deezer_token = os.environ.get("DEEZER_TOKEN")
+    if not deezer_token:
+        print("Error: DEEZER_TOKEN environment variable not set")
+        return
+
     header = {
         "Pragma": "no-cache",
         "Origin": "https://www.deezer.com",
@@ -102,11 +111,14 @@ def init_deezer_session(proxy_server: str, quality: str) -> None:
     }
     session = requests.session()
     session.headers.update(header)
-    session.cookies.update({"arl": os.environ.get("DEEZER_TOKEN"), "comeback": "1"})
+    session.cookies.update({"arl": deezer_token, "comeback": "1"})
     if len(proxy_server.strip()) > 0:
         print(f"Using proxy {proxy_server}")
         session.proxies.update({"https": proxy_server})
-    license_token, web_sound_quality = get_user_data()
+    user_data = get_user_data()
+    if user_data is None:
+        raise Exception("Error: Failed to get user data")
+    license_token, web_sound_quality = user_data
     set_default_song_quality(quality, web_sound_quality)
 
 
@@ -224,6 +236,9 @@ def writeid3v1_1(fo, song):
 
 
 def downloadpicture(pic_idid):
+    if not session:
+        raise DeezerApiException("Error: Deezer session not initialized")
+
     resp = session.get(get_picture_link(pic_idid))
     return resp.content
 
@@ -323,11 +338,15 @@ def writeid3v2(fo, song):
     except:
         FileSize = 0
 
+    track = None
     try:
         track = "%02s" % song["TRACK_NUMBER"]
         track += "/%02s" % album_get("TRACKS")
     except:
         pass
+
+    if track is None:
+        raise Exception("Error: Failed to get track number")
 
     # http://id3.org/id3v2.3.0#Attached_picture
     id3 = [
@@ -449,6 +468,10 @@ def download_song(song: dict, deezer_format: str, output_file: str) -> None:
     assert type(song) is dict, "song must be a dict"
     assert type(output_file) is str, "output_file must be a str"
 
+    if not session:
+        raise DeezerApiException("Error: Deezer session not initialized")
+
+    url = None
     try:
         url = get_song_url(song["TRACK_TOKEN"], deezer_format)
     except Exception as e:
@@ -468,6 +491,9 @@ def download_song(song: dict, deezer_format: str, output_file: str) -> None:
                 print("Fallback song seems to work")
         else:
             raise
+
+    if url is None:
+        raise Exception("Error: Failed to get song URL")
 
     key = calcbfkey(song["SNG_ID"])
     try:
@@ -494,6 +520,9 @@ def get_song_infos_from_deezer_website(search_type, id):
     # 1. open playlist https://www.deezer.com/de/playlist/1180748301 and click on song Honey from Moby in a new tab:
     # 2. Deezer gives you a 404: https://www.deezer.com/de/track/68925038
     # Deezer403Exception if we are not logged in
+
+    if not session:
+        raise DeezerApiException("Error: Deezer session not initialized")
 
     url = "https://www.deezer.com/us/{}/{}".format(search_type, id)
     resp = session.get(url)
@@ -533,6 +562,9 @@ def deezer_search(search, search_type):
     # search: string (What are you looking for?)
     # search_type: either one of the constants: TYPE_TRACK|TYPE_ALBUM|TYPE_ALBUM_TRACK (TYPE_PLAYLIST is not supported)
     # return: list of dicts (keys depend on search_type)
+
+    if not session:
+        raise DeezerApiException("Error: Deezer session not initialized")
 
     if search_type not in [TYPE_TRACK, TYPE_ALBUM, TYPE_ALBUM_TRACK]:
         print("ERROR: search_type is wrong: {}".format(search_type))

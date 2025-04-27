@@ -5,8 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-import aiogram
-from aiogram import types
+from aiogram import types, __version__ as aiogram_version
 from aiogram.filters import Command
 
 from bot import bot, dp
@@ -24,7 +23,7 @@ if sys.version_info < (3, 13):
 
 # Print the version of all modules
 print("Python version: ", sys.version)
-print("aiogram version: ", aiogram.__version__)
+print("aiogram version: ", aiogram_version)
 
 locale.setlocale(locale.LC_TIME, "")
 
