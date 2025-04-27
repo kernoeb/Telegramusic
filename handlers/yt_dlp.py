@@ -53,6 +53,9 @@ def crop_center(pil_img, crop_width, crop_height):
     )
 )
 async def get_youtube_audio(event: types.Message):
+    if not event.from_user:
+        return
+
     print(f"Processing YouTube link from user {event.from_user.id}")
     if is_downloading(event.from_user.id) is False:
         add_downloading(event.from_user.id)
@@ -88,6 +91,10 @@ async def get_youtube_audio(event: types.Message):
             dict_info = await asyncio.to_thread(
                 ydl.extract_info, event.text, download=True
             )
+
+            if not dict_info:
+                print("No information found")
+                return
 
             thumb_url = dict_info.get("thumbnail")
             track_title = dict_info.get("title", "Unknown Title")
@@ -191,7 +198,7 @@ async def get_youtube_audio(event: types.Message):
                     audio.add_tags()
                 except error:
                     pass  # Ignore if tags already exist
-                if thumb_for_tagging:
+                if thumb_for_tagging and audio.tags:
                     audio.tags.add(
                         APIC(
                             mime="image/jpeg",
@@ -246,6 +253,9 @@ async def get_youtube_audio(event: types.Message):
     )
 )
 async def get_soundcloud_audio(event: types.Message):
+    if not event.from_user:
+        return
+
     print(f"Processing SoundCloud link from user {event.from_user.id}")
     if is_downloading(event.from_user.id) is False:
         add_downloading(event.from_user.id)
@@ -276,6 +286,10 @@ async def get_soundcloud_audio(event: types.Message):
                 ydl.extract_info, event.text, download=True
             )
 
+            if not dict_info:
+                print("No information found")
+                return
+
             # Extract metadata (keys might differ slightly from YouTube)
             thumb_url = dict_info.get("thumbnail")
             # SoundCloud often has 'track' and 'artist' instead of 'title' and 'uploader'
@@ -299,10 +313,6 @@ async def get_soundcloud_audio(event: types.Message):
                         f"Error downloading/processing SoundCloud thumbnail: {img_err}"
                     )
 
-            # SoundCloud doesn't usually provide an 'upload_date' in the same format
-            # You might find it in 'timestamp' or other fields if needed, requires inspection
-            description = dict_info.get("description", "")  # Or other relevant info
-
             # Send cover
             if image_bytes:
                 try:
@@ -311,13 +321,10 @@ async def get_soundcloud_audio(event: types.Message):
                         caption=(
                             "<b>Track: {}</b>"
                             '\nArtist: {}\n\n<a href="{}">' + __("track_link") + "</a>"
-                            # Add description or other info if desired
-                            # "\n\n{}"
                         ).format(
                             track_title,
                             uploader,
                             webpage_url,
-                            # description[:200] # Example: truncate description
                         ),
                         parse_mode="HTML",
                     )
@@ -379,7 +386,7 @@ async def get_soundcloud_audio(event: types.Message):
                     audio.add_tags()
                 except error:
                     pass  # Ignore if tags already exist
-                if thumb_for_tagging:
+                if thumb_for_tagging and audio.tags:
                     audio.tags.add(
                         APIC(
                             mime="image/jpeg",

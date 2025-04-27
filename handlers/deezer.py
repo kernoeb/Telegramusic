@@ -77,6 +77,8 @@ FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
 async def download_track(track_id, retries=MAX_RETRIES):
     """Downloads a single track from Deezer using imported functions."""
+    tmp_track_base_dir = None  # Define outside the try/except to avoid "possibly unbound" errors
+
     for attempt in range(retries):
         try:
             # Fetch track metadata from Deezer website (may include download details)
@@ -90,6 +92,13 @@ async def download_track(track_id, retries=MAX_RETRIES):
                     raise ValueError(
                         f"Failed to get track info for {track_id} after {retries} attempts."
                     )
+
+            # Make sure track_infos is a dictionary, not a list
+            if isinstance(track_infos, list):
+                if len(track_infos) > 0:
+                    track_infos = track_infos[0]  # Take the first item if it's a list
+                else:
+                    raise ValueError(f"Empty track info list received for track {track_id}")
 
             file_extension, deezer_format = get_file_format(track_infos)
 
@@ -116,17 +125,22 @@ async def download_track(track_id, retries=MAX_RETRIES):
                 raise IOError(f"Downloaded file {song_path} is missing or empty.")
 
             # Add download-specific details to the track_infos dictionary
-            track_infos["song_path"] = str(song_path)  # Store as string
-            track_infos["song_name"] = track_infos.get("SNG_TITLE", f"Track {track_id}")
-            track_infos["artist_name"] = track_infos.get("ART_NAME", "Unknown Artist")
-            track_infos["file_extension"] = file_extension
-            track_infos["download_dir"] = str(tmp_track_base_dir)  # Store base dir path
+            # Create a deep copy to avoid modifying the original if it's not a dict
+            track_info_dict = {}
+            if isinstance(track_infos, dict):
+                track_info_dict = track_infos.copy()
+
+            track_info_dict["song_path"] = str(song_path)  # Store as string
+            track_info_dict["song_name"] = track_infos.get("SNG_TITLE", f"Track {track_id}") if isinstance(track_infos, dict) else f"Track {track_id}"
+            track_info_dict["artist_name"] = track_infos.get("ART_NAME", "Unknown Artist") if isinstance(track_infos, dict) else "Unknown Artist"
+            track_info_dict["file_extension"] = file_extension
+            track_info_dict["download_dir"] = str(tmp_track_base_dir)  # Store base dir path
             # Carry over track number if present in original info
-            if "TRACK_NUMBER" in track_infos:
-                track_infos["TRACK_NUMBER"] = track_infos["TRACK_NUMBER"]
+            if isinstance(track_infos, dict) and "TRACK_NUMBER" in track_infos:
+                track_info_dict["TRACK_NUMBER"] = track_infos["TRACK_NUMBER"]
 
             print(f"Successfully downloaded track {track_id} to {song_path}")
-            return track_infos  # Success, return details
+            return track_info_dict  # Success, return details
 
         except Exception as e:
             print(
@@ -142,13 +156,13 @@ async def download_track(track_id, retries=MAX_RETRIES):
             else:
                 print(f"Failed to download track {track_id} after {retries} attempts.")
                 # Clean up the base directory if the track ultimately failed
-                if "tmp_track_base_dir" in locals() and tmp_track_base_dir.exists():
+                if tmp_track_base_dir and tmp_track_base_dir.exists():
                     await aioshutil.rmtree(tmp_track_base_dir, ignore_errors=True)
                 raise  # Re-raise the last exception
 
     # This part should ideally not be reached if retries are exhausted (exception raised)
     # Clean up the base directory if we somehow exit the loop without success
-    if "tmp_track_base_dir" in locals() and tmp_track_base_dir.exists():
+    if tmp_track_base_dir and tmp_track_base_dir.exists():
         await aioshutil.rmtree(tmp_track_base_dir, ignore_errors=True)
     return None
 
@@ -484,11 +498,21 @@ def get_album_caption(metadata):
     ).format(**metadata)
 
 
+def get_user_infos(event: types.Message):
+    user_id = None
+    username = None
+    first_name = None
+
+    if event.from_user:
+        user_id = event.from_user.id
+        username = event.from_user.username
+        first_name = event.from_user.first_name
+
+    return user_id, username, first_name
+
 async def send_track_audio(event: types.Message, metadata, dl_track_info):
     """Sends a single track as an audio file."""
-    user_id = event.from_user.id
-    username = event.from_user.username
-    first_name = event.from_user.first_name
+    user_id, username, first_name = get_user_infos(event)
     print(f"USER_DEBUG: Sending track audio to user_id={user_id} username={username} first_name={first_name}")
 
     caption = get_track_caption(metadata)
@@ -514,11 +538,9 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
 
 async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
     """Sends album tracks as audio files (individually or as media group)."""
-    user_id = event.from_user.id
-    username = event.from_user.username
-    first_name = event.from_user.first_name
+    user_id, username, first_name = get_user_infos(event)
     print(f"USER_DEBUG: Sending album audio to user_id={user_id} username={username} first_name={first_name}")
-    
+
     caption = get_album_caption(metadata)
 
     # Send cover photo first
@@ -636,9 +658,7 @@ async def create_and_send_zip(
     Handles both copying to a path and sending directly to Telegram.
     Places files inside 'Artist - Album [Year]' directory within the zip.
     """
-    user_id = event.from_user.id
-    username = event.from_user.username
-    first_name = event.from_user.first_name
+    user_id, username, first_name = get_user_infos(event)
     print(f"USER_DEBUG: Creating and sending zip to user_id={user_id} username={username} first_name={first_name} is_album={is_album}")
     # Determine source directory (assuming all tracks are in the same dir)
     if not dl_tracks_info:
@@ -994,12 +1014,13 @@ async def create_and_send_zip(
 @deezer_router.message(F.text.regexp(TRACK_REGEX))
 async def handle_track_link(event: types.Message, real_link=None):
     """Handles Deezer track links using imported utils and functions."""
-    user_id = event.from_user.id
-    username = event.from_user.username
-    first_name = event.from_user.first_name
+    user_id, username, first_name = get_user_infos(event)
     print(f"USER_DEBUG: Track link request from user_id={user_id} username={username} first_name={first_name}")
     print(f"User {user_id}: Received track link: {event.text}")
-    link_to_process = real_link or event.text.strip()
+    link_to_process = real_link or event.text and event.text.strip() or None
+    if not link_to_process:
+        await event.answer("Invalid track link format.")
+        return
     track_match = re.search(TRACK_REGEX, link_to_process)
     if not track_match:
         await event.answer("Invalid track link format.")
@@ -1069,12 +1090,13 @@ async def handle_track_link(event: types.Message, real_link=None):
 @deezer_router.message(F.text.regexp(ALBUM_REGEX))
 async def handle_album_link(event: types.Message, real_link=None):
     """Handles Deezer album links using imported utils and functions."""
-    user_id = event.from_user.id
-    username = event.from_user.username
-    first_name = event.from_user.first_name
+    user_id, username, first_name = get_user_infos(event)
     print(f"USER_DEBUG: Album link request from user_id={user_id} username={username} first_name={first_name}")
     print(f"User {user_id}: Received album link: {event.text}")
-    link_to_process = real_link or event.text.strip()
+    link_to_process = real_link or event.text and event.text.strip()
+    if not link_to_process:
+        await event.answer("Invalid album link format.")
+        return
     album_match = re.search(ALBUM_REGEX, link_to_process)
     if not album_match:
         await event.answer("Invalid album link format.")
@@ -1152,19 +1174,21 @@ async def handle_album_link(event: types.Message, real_link=None):
 )
 async def handle_shortlink(event: types.Message):
     """Handles Deezer shortlinks by resolving them, with improved SSL handling."""
-    user_id = event.from_user.id
-    username = event.from_user.username
-    first_name = event.from_user.first_name
+    user_id, username, first_name = get_user_infos(event)
     print(f"USER_DEBUG: Shortlink request from user_id={user_id} username={username} first_name={first_name}")
     print(f"User {user_id}: Received shortlink: {event.text}")
     tmp_msg = await event.answer("🔗 Resolving shortlink...")
     ssl_context = ssl.create_default_context(cafile=certifi.where())  # Use certifi CAs
     connector = aiohttp.TCPConnector(ssl=ssl_context)
 
+    if not event.text:
+        await event.answer("Invalid shortlink format.")
+        return
+
     try:
         async with aiohttp.ClientSession(connector=connector) as session:
             async with session.head(
-                event.text.strip(), allow_redirects=True, timeout=15
+                event.text.strip(), allow_redirects=True, timeout=aiohttp.ClientTimeout(total=15)
             ) as response:
                 real_link = str(response.url).split("?")[0]
                 print(f"Resolved shortlink to: {real_link}")
@@ -1219,7 +1243,7 @@ async def inline_search_handler(inline_query: InlineQuery):
     first_name = inline_query.from_user.first_name
     query = inline_query.query.strip()
     print(f"USER_DEBUG: Inline search from user_id={user_id} username={username} first_name={first_name} query='{query}'")
-    
+
     items = []
     search_type = TYPE_TRACK  # Default search type
 
