@@ -1,4 +1,4 @@
-FROM python:3.9.18-alpine3.19
+FROM python:3.13-alpine3.21
 
 RUN apk add --no-cache ffmpeg alpine-sdk python3-dev py3-setuptools tiff-dev jpeg-dev openjpeg-dev zlib-dev freetype-dev lcms2-dev \
     libwebp-dev tcl-dev tk-dev harfbuzz-dev fribidi-dev libimagequant-dev \
@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY patches patches
+COPY dl_utils dl_utils
 COPY handlers handlers
 COPY langs.json ./
 COPY main.py ./
@@ -23,13 +23,9 @@ ENV ENABLE_FLAC=$ENABLE_FLAC
 RUN echo "> ENABLE_FLAC : $ENABLE_FLAC"
 
 RUN if [ "$ENABLE_FLAC" = "0" ]; then \
-    echo "FLAC : disabled" && \
-    mv ./patches/deezer_settings.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/deezer_settings.py && \
-    mv ./patches/dee_api.py /usr/local/lib/python3.9/site-packages/deezloader/deezloader/dee_api.py && \
-    rm -rf ./patches; \
+      echo "FLAC : disabled"; \
     else \
-    echo "FLAC : enabled" && \
-    rm -rf ./patches; \
+      echo "FLAC : enabled"; \
     fi
 
-CMD [ "python", "./main.py" ]
+CMD [ "python", "-u", "main.py" ]

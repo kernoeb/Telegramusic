@@ -1,5 +1,6 @@
 services:
   worker:
+    container_name: telegramusic
     build:
       context: .
       dockerfile: Dockerfile

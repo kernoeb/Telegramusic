@@ -5,30 +5,25 @@ import os
 import sys
 from pathlib import Path
 
-import aiogram
-from aiogram import types
+from aiogram import types, __version__ as aiogram_version
 from aiogram.filters import Command
 
 from bot import bot, dp
 from handlers.deezer import deezer_router
-from handlers.youtube import youtube_router
+from handlers.yt_dlp import youtube_router, soundcloud_router
 from utils import TMP_DIR
 
-if (
-    sys.version_info.major != 3
-    or sys.version_info.minor != 9
-    or sys.version_info.micro != 18
-):
+if sys.version_info < (3, 13):
     print(
-        "Python 3.9.18 is required, but you are using Python {}.{}.{}".format(
-            sys.version_info.major, sys.version_info.minor, sys.version_info.micro
+        "Python 3.13 is required, but you are using Python {}.{}".format(
+            sys.version_info.major, sys.version_info.minor
         )
     )
     sys.exit(1)
 
 # Print the version of all modules
 print("Python version: ", sys.version)
-print("aiogram version: ", aiogram.__version__)
+print("aiogram version: ", aiogram_version)
 
 locale.setlocale(locale.LC_TIME, "")
 
@@ -68,7 +63,7 @@ async def help_start(event: types.Message):
 
 
 async def main() -> None:
-    dp.include_routers(youtube_router, deezer_router)
+    dp.include_routers(youtube_router, soundcloud_router, deezer_router)
     await dp.start_polling(bot)
 
 
