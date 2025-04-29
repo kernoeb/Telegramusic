@@ -528,9 +528,11 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
         f"USER_DEBUG: Sending track audio to user_id={user_id} username={username} first_name={first_name}"
     )
 
+    title = metadata.get("title", dl_track_info["song_name"])
     caption = get_track_caption(metadata)
     song_path = dl_track_info["song_path"]
     duration = get_audio_duration(song_path)
+    performer = ", ".join(metadata.get("artists_list", [metadata["artist"]]))
 
     # Send cover photo first
     await event.answer_photo(
@@ -541,9 +543,9 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
 
     # Send audio file
     await event.answer_audio(
-        FSInputFile(song_path),
+        FSInputFile(song_path, filename=f"{clean_filename(performer)} - {clean_filename(title)}{dl_track_info['file_extension']}"),
         title=metadata["title"],
-        performer=", ".join(metadata.get("artists_list", [metadata["artist"]])),
+        performer=performer,
         duration=duration,
         disable_notification=True,
     )

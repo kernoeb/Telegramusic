@@ -506,6 +506,32 @@ def download_song(song: dict, deezer_format: str, output_file: str) -> None:
                 writeid3v1_1(fo, song)
     except Exception as e:
         raise DeezerApiException(f"Could not write song to disk: {e}") from e
+
+    # Tag the file
+    if deezer_format == "FLAC":
+        try:
+            from mutagen.flac import FLAC, Picture
+
+            audio = FLAC(output_file)
+            audio["title"] = song.get("SNG_TITLE", "")
+            audio["artist"] = song.get("ART_NAME", "")
+            audio["album"] = song.get("ALB_TITLE", "")
+            audio["tracknumber"] = str(song.get("TRACK_NUMBER", ""))
+            audio["date"] = album_Data.get("PHYSICAL_RELEASE_DATE", "")[:4]
+            audio["label"] = album_Data.get("LABEL_NAME", "")
+
+            # Add album art
+            pic_data = downloadpicture(song["ALB_PICTURE"])
+            image = Picture()
+            image.type = 3  # front cover
+            image.mime = "image/jpeg"
+            image.desc = "Cover"
+            image.data = pic_data
+            audio.add_picture(image)
+
+            audio.save()
+        except Exception as e:
+            print(f"Warning: could not write FLAC tags: {e}")
     else:
         print("Download finished: {}".format(output_file))
 
