@@ -61,6 +61,9 @@ init_deezer_session("", DEFAULT_QUALITY)
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 5))
 print("Max retries: " + str(MAX_RETRIES))
 
+SEND_ALBUM_COVER = True if os.environ.get("SEND_ALBUM_COVER") == "false" else True
+print("Send album cover: " + str(SEND_ALBUM_COVER))
+
 # Constants
 DEEZER_URL = "https://deezer.com"
 API_URL = "https://api.deezer.com"
@@ -534,12 +537,13 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
     duration = get_audio_duration(song_path)
     performer = ", ".join(metadata.get("artists_list", [metadata["artist"]]))
 
-    # Send cover photo first
-    await event.answer_photo(
-        BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
-        caption=caption,
-        parse_mode="HTML",
-    )
+    if(SEND_ALBUM_COVER):
+        # Send cover photo first
+        await event.answer_photo(
+            BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
+            caption=caption,
+            parse_mode="HTML",
+        )
 
     # Send audio file
     await event.answer_audio(
@@ -560,12 +564,13 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
 
     caption = get_album_caption(metadata)
 
-    # Send cover photo first
-    await event.answer_photo(
-        BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
-        caption=caption,
-        parse_mode="HTML",
-    )
+    if(SEND_ALBUM_COVER):
+        # Send cover photo first
+        await event.answer_photo(
+            BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
+            caption=caption,
+            parse_mode="HTML",
+        )
 
     # Map API track data to downloaded files (using SNG_ID if available)
     api_tracks_by_id = {
