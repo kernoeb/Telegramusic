@@ -61,7 +61,7 @@ init_deezer_session("", DEFAULT_QUALITY)
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", 5))
 print("Max retries: " + str(MAX_RETRIES))
 
-SEND_ALBUM_COVER = True if os.environ.get("SEND_ALBUM_COVER") == "false" else True
+SEND_ALBUM_COVER = False if os.environ.get("SEND_ALBUM_COVER") == "false" else True
 print("Send album cover: " + str(SEND_ALBUM_COVER))
 
 # Constants
