@@ -399,18 +399,22 @@ def writeid3v2(fo, song):
         print("ERROR: no album cover?", e)
 
     try:
-        id3.append(maketag("TORY", makeutf8(str(album_get("PHYSICAL_RELEASE_DATE")[:4]))))
-    except Exception as e:
+        id3.append(
+            maketag("TORY", makeutf8(str(album_get("PHYSICAL_RELEASE_DATE")[:4])))
+        )
+    except Exception:
         print("ERROR: no release date?")
 
     try:
-        id3.append(maketag("TYER", makeutf8(str(album_get("DIGITAL_RELEASE_DATE")[:4]))))  # The 'Year' frame is a numeric string with a year of the recording. This frames is always four characters long (until the year 10000).
-    except Exception as e:
+        id3.append(
+            maketag("TYER", makeutf8(str(album_get("DIGITAL_RELEASE_DATE")[:4])))
+        )  # The 'Year' frame is a numeric string with a year of the recording. This frames is always four characters long (until the year 10000).
+    except Exception:
         print("ERROR: no digital release date?")
 
     try:
         id3.append(maketag("TDAT", makeutf8(str(phyDate_DDMM))))
-    except Exception as e:
+    except Exception:
         print("ERROR: no release date?")
 
     id3data = b"".join(id3)

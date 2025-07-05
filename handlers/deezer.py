@@ -537,7 +537,7 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
     duration = get_audio_duration(song_path)
     performer = ", ".join(metadata.get("artists_list", [metadata["artist"]]))
 
-    if(SEND_ALBUM_COVER):
+    if SEND_ALBUM_COVER:
         # Send cover photo first
         await event.answer_photo(
             BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
@@ -547,7 +547,10 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
 
     # Send audio file
     await event.answer_audio(
-        FSInputFile(song_path, filename=f"{clean_filename(performer)} - {clean_filename(title)}{dl_track_info['file_extension']}"),
+        FSInputFile(
+            song_path,
+            filename=f"{clean_filename(performer)} - {clean_filename(title)}{dl_track_info['file_extension']}",
+        ),
         title=metadata["title"],
         performer=performer,
         duration=duration,
@@ -564,7 +567,7 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
 
     caption = get_album_caption(metadata)
 
-    if(SEND_ALBUM_COVER):
+    if SEND_ALBUM_COVER:
         # Send cover photo first
         await event.answer_photo(
             BufferedInputFile(metadata["cover_data"], filename="cover.jpg"),
