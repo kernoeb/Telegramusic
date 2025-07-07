@@ -394,6 +394,11 @@ def writeid3v2(fo, song):
     )
 
     try:
+        id3.append(maketag("TPUB", makepic(downloadpicture(song["LABEL_NAME"]))))
+    except Exception as e:
+        print("ERROR: no publisher?", e)
+
+    try:
         id3.append(maketag("APIC", makepic(downloadpicture(song["ALB_PICTURE"]))))
     except Exception as e:
         print("ERROR: no album cover?", e)
