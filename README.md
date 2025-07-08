@@ -116,13 +116,21 @@ file :
 ENABLE_FLAC=1
 ```
 
+### Do not send album art
+
+The default behavior is to send album cover and liks to the album and song. If you do not want to send it, set the `SEND_ALBUM_COVER` to `true`.
+
+```
+SEND_ALBUM_COVER=true
+```
+
 ### Troubleshooting
 
 > "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."
 > Please note that your account may be banned if you use this feature.
 
 Add a `cookies.txt` in `./local_resources`.
-To generate this file, please see : https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp.
+To generate this file, please see : <https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp>.
 
 You don't need to restart the bot, it will automatically reload the cookies when downloading a YouTube video.
 

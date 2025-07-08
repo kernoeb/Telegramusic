@@ -357,18 +357,6 @@ def writeid3v2(fo, song):
             "TLEN", makeutf8(str(int(song["DURATION"]) * 1000))
         ),  # The 'Length' frame contains the length of the audiofile in milliseconds, represented as a numeric string.
         maketag(
-            "TORY", makeutf8(str(album_get("PHYSICAL_RELEASE_DATE")[:4]))
-        ),  # The 'Original release year' frame is intended for the year when the original recording was released. if for example the music in the file should be a cover of a previously released song
-        maketag(
-            "TYER", makeutf8(str(album_get("DIGITAL_RELEASE_DATE")[:4]))
-        ),  # The 'Year' frame is a numeric string with a year of the recording. This frames is always four characters long (until the year 10000).
-        maketag(
-            "TDAT", makeutf8(str(phyDate_DDMM))
-        ),  # The 'Date' frame is a numeric string in the DDMM format containing the date for the recording. This field is always four characters long.
-        maketag(
-            "TPUB", makeutf8(album_get("LABEL_NAME"))
-        ),  # The 'Publisher' frame simply contains the name of the label or publisher.
-        maketag(
             "TSIZ", makeutf8(str(FileSize))
         ),  # The 'Size' frame contains the size of the audiofile in bytes, excluding the ID3v2 tag, represented as a numeric string.
         maketag("TFLT", makeutf8("MPG/3")),
@@ -406,9 +394,33 @@ def writeid3v2(fo, song):
     )
 
     try:
+        id3.append(maketag("TPUB", makepic(downloadpicture(song["LABEL_NAME"]))))
+    except Exception as e:
+        print("ERROR: no publisher?", e)
+
+    try:
         id3.append(maketag("APIC", makepic(downloadpicture(song["ALB_PICTURE"]))))
     except Exception as e:
         print("ERROR: no album cover?", e)
+
+    try:
+        id3.append(
+            maketag("TORY", makeutf8(str(album_get("PHYSICAL_RELEASE_DATE")[:4])))
+        )
+    except Exception:
+        print("ERROR: no release date?")
+
+    try:
+        id3.append(
+            maketag("TYER", makeutf8(str(album_get("DIGITAL_RELEASE_DATE")[:4])))
+        )  # The 'Year' frame is a numeric string with a year of the recording. This frames is always four characters long (until the year 10000).
+    except Exception:
+        print("ERROR: no digital release date?")
+
+    try:
+        id3.append(maketag("TDAT", makeutf8(str(phyDate_DDMM))))
+    except Exception:
+        print("ERROR: no release date?")
 
     id3data = b"".join(id3)
     # >      big-endian
