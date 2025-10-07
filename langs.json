@@ -88,5 +88,15 @@
     "de": "❌ Fehler bei der Suche:",
     "zh": "❌ 搜索过程中出错:",
     "ar": "❌ خطأ أثناء البحث:"
+  },
+  "download_error_specific": {
+    "fr": "❌ Échec du téléchargement du morceau:",
+    "en": "❌ Error downloading track:",
+    "es": "❌ Error al descargar la canción:",
+    "pt": "❌ Erro ao baixar a música:",
+    "in": "❌ Kesalahan mengunduh musik:",
+    "de": "❌ Fehler beim Herunterladen des Titels:",
+    "zh": "❌ 下载曲目时出错:",
+    "ar": "❌ خطأ في تنزيل المسار:"
   }
 }
