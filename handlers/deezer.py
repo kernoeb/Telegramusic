@@ -1219,7 +1219,9 @@ async def handle_album_link(event: types.Message, real_link=None):
 
 
 @deezer_router.message(
-    F.text.regexp(r"^https?://(?:www\.)?(?:deezer|dzr)\.page\.link/.*$")
+    F.text.regexp(
+        r"^https?://(?:www\.)?(?:deezer|dzr)\.page\.link/.*$|^https?://(?:www\.)?link\.deezer\.com/.*$"
+    )
 )
 async def handle_shortlink(event: types.Message):
     """Handles Deezer shortlinks by resolving them, with improved SSL handling."""
