@@ -18,6 +18,8 @@ from aiogram import F, Router, types
 from aiogram.types import (
     BufferedInputFile,
     FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     InlineQuery,
     InlineQueryResultArticle,
     InputMediaAudio,
@@ -92,6 +94,15 @@ COPY_FILES_PATH = os.environ.get("COPY_FILES_PATH")
 FILE_LINK_TEMPLATE = os.environ.get("FILE_LINK_TEMPLATE")
 
 _session_refresh_lock = None  # Lazily initialized asyncio.Lock
+_bot_username = None
+
+
+async def _get_bot_username() -> str:
+    global _bot_username
+    if _bot_username is None:
+        me = await bot.get_me()
+        _bot_username = me.username
+    return _bot_username
 
 
 def _get_session_refresh_lock():
@@ -1405,6 +1416,8 @@ async def inline_search_handler(inline_query: InlineQuery):
         search_results = await loop.run_in_executor(
             None, functools.partial(deezer_search, query, search_type)
         )
+        bot_username = await _get_bot_username()
+        download_button_text = "📥 " + __("download_button")
 
         for item_data in search_results[:20]:  # Limit results sent
             try:
@@ -1423,7 +1436,6 @@ async def inline_search_handler(inline_query: InlineQuery):
                     artist = item_data.get("artist", "Unknown Artist")
                     description = f"Album by {artist}"
                     link = DEEZER_URL + "/album/%s" % quote(str(result_id))
-                    inline_result_id = f"album_{result_id}"
                 elif id_type == TYPE_TRACK:
                     title = item_data.get("title", f"Track {result_id}")
                     artist = item_data.get("artist", "Unknown Artist")
@@ -1432,17 +1444,29 @@ async def inline_search_handler(inline_query: InlineQuery):
                     if album_title:
                         description += f" - {album_title}"
                     link = DEEZER_URL + "/track/%s" % quote(str(result_id))
-                    inline_result_id = f"track_{result_id}"
                 else:
                     print(f"Skipping item with unhandled id_type: {id_type}")
                     continue
 
+                payload = f"{id_type}_{result_id}"
+                deep_link = f"https://t.me/{bot_username}?start={payload}"
+                reply_markup = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text=download_button_text, url=deep_link
+                            )
+                        ]
+                    ]
+                )
+
                 article = InlineQueryResultArticle(
-                    id=inline_result_id,
+                    id=payload,
                     title=title,
                     description=description,
                     thumb_url=thumb_url if thumb_url else None,  # Pass None if empty
                     input_message_content=InputTextMessageContent(message_text=link),
+                    reply_markup=reply_markup,
                 )
                 items.append(article)
             except Exception as item_e:

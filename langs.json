@@ -98,5 +98,15 @@
     "de": "❌ Fehler beim Herunterladen des Titels:",
     "zh": "❌ 下载曲目时出错:",
     "ar": "❌ خطأ في تنزيل المسار:"
+  },
+  "download_button": {
+    "fr": "Télécharger",
+    "en": "Download",
+    "es": "Descargar",
+    "pt": "Baixar",
+    "in": "Unduh",
+    "de": "Herunterladen",
+    "zh": "下载",
+    "ar": "تنزيل"
   }
 }
