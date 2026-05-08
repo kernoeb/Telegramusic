@@ -23,6 +23,13 @@ youtube_router = Router()
 soundcloud_router = Router()  # New router for SoundCloud
 
 COOKIES_PATH = os.environ.get("COOKIES_PATH")
+YT_PLAYER_CLIENT = [
+    c.strip()
+    for c in os.environ.get(
+        "YT_PLAYER_CLIENT", "tv,web_safari,web_embedded,android_vr"
+    ).split(",")
+    if c.strip()
+]
 
 # Define separate temp directories
 YT_TMP_DIR = Path(TMP_DIR, "yt")
@@ -73,6 +80,7 @@ async def get_youtube_audio(event: types.Message):
                 ],
                 "quiet": True,  # Suppress yt-dlp console output
                 "no_warnings": True,
+                "extractor_args": {"youtube": {"player_client": YT_PLAYER_CLIENT}},
             }
 
             # if cookies.txt exists, use it
