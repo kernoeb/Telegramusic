@@ -7,7 +7,6 @@ import html.parser
 import json
 import os
 import re
-import struct
 import urllib.parse
 from binascii import a2b_hex, b2a_hex
 from typing import Any
@@ -15,6 +14,10 @@ from typing import Any
 import requests
 from Crypto.Cipher import Blowfish
 from Crypto.Hash import MD5
+from mutagen import MutagenError
+from mutagen.flac import FLAC, Picture
+from mutagen.id3 import APIC, TALB, TDRC, TIT2, TPOS, TPE1, TPE2, TRCK, PictureType
+from mutagen.mp3 import MP3
 
 # BEGIN TYPES
 TYPE_TRACK = "track"
@@ -166,7 +169,9 @@ def calcbfkey(songid):
     key = b"g4el58wc0zvf9na1"
     songid_md5 = md5hex(songid.encode())
 
-    xor_op = lambda i: chr(songid_md5[i] ^ songid_md5[i + 16] ^ key[i])
+    def xor_op(i):
+        return chr(songid_md5[i] ^ songid_md5[i + 16] ^ key[i])
+
     decrypt_key = "".join([xor_op(i) for i in range(16)])
     return decrypt_key
 
@@ -200,38 +205,63 @@ def decryptfile(fh, key, fo):
         i += 1
 
 
-def writeid3v1_1(fo, song):
-    # Bugfix changed song["SNG_TITLE... to song.get("SNG_TITLE... to avoid 'key-error' in case the key does not exist
-    def song_get(song, key):
-        try:
-            return song.get(key).encode("utf-8")
-        except:
-            return b""
+def write_song_metadata(output_file: str, song: dict, is_flac: bool) -> None:
+    """Write metadata tags to a downloaded song file using mutagen.
+    Ported from upstream kmille/deezer-downloader."""
 
-    def album_get(key):
-        global album_Data
-        try:
-            return album_Data.get(key).encode("utf-8")
-        except:
-            return b""
+    def set_metadata(audio, key, value):
+        if not value:
+            return
+        if isinstance(audio, MP3):
+            if key == "artist":
+                audio["TPE1"] = TPE1(encoding=3, text=value)
+            elif key == "albumartist":
+                audio["TPE2"] = TPE2(encoding=3, text=value)
+            elif key == "title":
+                audio["TIT2"] = TIT2(encoding=3, text=value)
+            elif key == "album":
+                audio["TALB"] = TALB(encoding=3, text=value)
+            elif key == "discnumber":
+                audio["TPOS"] = TPOS(encoding=3, text=value)
+            elif key == "tracknumber":
+                audio["TRCK"] = TRCK(encoding=3, text=value)
+            elif key == "date":
+                audio["TDRC"] = TDRC(encoding=3, text=value)
+            elif key == "picture":
+                audio["APIC"] = APIC(
+                    encoding=3,
+                    mime="image/jpeg",
+                    type=PictureType.COVER_FRONT,
+                    desc="Cover",
+                    data=value,
+                )
+        else:
+            if key == "picture":
+                pic = Picture()
+                pic.mime = "image/jpeg"
+                pic.type = PictureType.COVER_FRONT
+                pic.desc = "Cover"
+                pic.data = value
+                audio.add_picture(pic)
+            else:
+                audio[key] = value
 
-    # what struct.pack expects
-    # B => int
-    # s => bytes
-    data = struct.pack(
-        "3s30s30s30s4s28sBHB",
-        b"TAG",  # header
-        song_get(song, "SNG_TITLE"),  # title
-        song_get(song, "ART_NAME"),  # artist
-        song_get(song, "ALB_TITLE"),  # album
-        album_get("PHYSICAL_RELEASE_DATE"),  # year
-        album_get("LABEL_NAME"),
-        0,  # comment
-        int(song_get(song, "TRACK_NUMBER")),  # tracknum
-        255,  # genre
+    audio = FLAC(output_file) if is_flac else MP3(output_file)
+    set_metadata(audio, "artist", song.get("ART_NAME"))
+    set_metadata(audio, "title", song.get("SNG_TITLE"))
+    set_metadata(audio, "album", song.get("ALB_TITLE"))
+    set_metadata(audio, "tracknumber", song.get("TRACK_NUMBER"))
+    set_metadata(audio, "discnumber", song.get("DISK_NUMBER"))
+    if "album_Data" in globals() and album_Data and "PHYSICAL_RELEASE_DATE" in album_Data:
+        set_metadata(audio, "date", album_Data.get("PHYSICAL_RELEASE_DATE", "")[:4])
+    try:
+        set_metadata(audio, "picture", downloadpicture(song["ALB_PICTURE"]))
+    except Exception as e:
+        print(f"Warning: could not embed album cover: {e}")
+    set_metadata(
+        audio, "albumartist", song.get("ALB_ART_NAME", song.get("ART_NAME"))
     )
-
-    fo.write(data)
+    audio.save()
 
 
 def downloadpicture(pic_idid):
@@ -239,6 +269,7 @@ def downloadpicture(pic_idid):
         raise DeezerApiException("Error: Deezer session not initialized")
 
     resp = session.get(get_picture_link(pic_idid))
+    resp.raise_for_status()
     return resp.content
 
 
@@ -246,198 +277,6 @@ def get_picture_link(pic_idid):
     setting_domain_img = "https://e-cdns-images.dzcdn.net/images"
     url = setting_domain_img + "/cover/" + pic_idid + "/1200x1200.jpg"
     return url
-
-
-def writeid3v2(fo, song):
-    def make28bit(x):
-        return (
-            ((x << 3) & 0x7F000000)
-            | ((x << 2) & 0x7F0000)
-            | ((x << 1) & 0x7F00)
-            | (x & 0x7F)
-        )
-
-    def maketag(tag, content):
-        return struct.pack(">4sLH", tag.encode("ascii"), len(content), 0) + content
-
-    def album_get(key):
-        global album_Data
-        try:
-            return album_Data.get(key)
-        except:
-            # raise
-            return ""
-
-    def song_get(song, key):
-        try:
-            return song[key]
-        except:
-            # raise
-            return ""
-
-    def makeutf8(txt):
-        # return b"\x03" + txt.encode('utf-8')
-        return "\x03{}".format(txt).encode()
-
-    def makepic(data):
-        # Picture type:
-        # 0x00     Other
-        # 0x01     32x32 pixels 'file icon' (PNG only)
-        # 0x02     Other file icon
-        # 0x03     Cover (front)
-        # 0x04     Cover (back)
-        # 0x05     Leaflet page
-        # 0x06     Media (e.g. lable side of CD)
-        # 0x07     Lead artist/lead performer/soloist
-        # 0x08     Artist/performer
-        # 0x09     Conductor
-        # 0x0A     Band/Orchestra
-        # 0x0B     Composer
-        # 0x0C     Lyricist/text writer
-        # 0x0D     Recording Location
-        # 0x0E     During recording
-        # 0x0F     During performance
-        # 0x10     Movie/video screen capture
-        # 0x11     A bright coloured fish
-        # 0x12     Illustration
-        # 0x13     Band/artist logotype
-        # 0x14     Publisher/Studio logotype
-        imgframe = (
-            b"\x00",  # text encoding
-            b"image/jpeg",
-            b"\0",  # mime type
-            b"\x03",  # picture type: 'Cover (front)'
-            b""[:64],
-            b"\0",  # description
-            data,
-        )
-
-        return b"".join(imgframe)
-
-    # get Data as DDMM
-    try:
-        phyDate_YYYYMMDD = album_get("PHYSICAL_RELEASE_DATE").split("-")  #'2008-11-21'
-        phyDate_DDMM = phyDate_YYYYMMDD[2] + phyDate_YYYYMMDD[1]
-    except:
-        phyDate_DDMM = ""
-
-    # get size of first item in the list that is not 0
-    try:
-        FileSize = [
-            song_get(song, i)
-            for i in (
-                "FILESIZE_AAC_64",
-                "FILESIZE_MP3_320",
-                "FILESIZE_MP3_256",
-                "FILESIZE_MP3_64",
-                "FILESIZE",
-            )
-            if song_get(song, i)
-        ][0]
-    except:
-        FileSize = 0
-
-    track = None
-    try:
-        track = "%02s" % song["TRACK_NUMBER"]
-        track += "/%02s" % album_get("TRACKS")
-    except:
-        pass
-
-    if track is None:
-        raise Exception("Error: Failed to get track number")
-
-    # http://id3.org/id3v2.3.0#Attached_picture
-    id3 = [
-        maketag(
-            "TRCK", makeutf8(track)
-        ),  # The 'Track number/Position in set' frame is a numeric string containing the order number of the audio-file on its original recording. This may be extended with a "/" character and a numeric string containing the total numer of tracks/elements on the original recording. E.g. "4/9".
-        maketag(
-            "TLEN", makeutf8(str(int(song["DURATION"]) * 1000))
-        ),  # The 'Length' frame contains the length of the audiofile in milliseconds, represented as a numeric string.
-        maketag(
-            "TSIZ", makeutf8(str(FileSize))
-        ),  # The 'Size' frame contains the size of the audiofile in bytes, excluding the ID3v2 tag, represented as a numeric string.
-        maketag("TFLT", makeutf8("MPG/3")),
-    ]  # decimal, no term NUL
-    id3.extend(
-        [
-            maketag(ID_id3_frame, makeutf8(song_get(song, ID_song)))
-            for (ID_id3_frame, ID_song) in (
-                (
-                    "TALB",
-                    "ALB_TITLE",
-                ),  # The 'Album/Movie/Show title' frame is intended for the title of the recording(/source of sound) which the audio in the file is taken from.
-                (
-                    "TPE1",
-                    "ART_NAME",
-                ),  # The 'Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group' is used for the main artist(s). They are seperated with the "/" character.
-                (
-                    "TPE2",
-                    "ART_NAME",
-                ),  # The 'Band/Orchestra/Accompaniment' frame is used for additional information about the performers in the recording.
-                (
-                    "TPOS",
-                    "DISK_NUMBER",
-                ),  # The 'Part of a set' frame is a numeric string that describes which part of a set the audio came from. This frame is used if the source described in the "TALB" frame is divided into several mediums, e.g. a double CD. The value may be extended with a "/" character and a numeric string containing the total number of parts in the set. E.g. "1/2".
-                (
-                    "TIT2",
-                    "SNG_TITLE",
-                ),  # The 'Title/Songname/Content description' frame is the actual name of the piece (e.g. "Adagio", "Hurricane Donna").
-                (
-                    "TSRC",
-                    "ISRC",
-                ),  # The 'ISRC' frame should contain the International Standard Recording Code (ISRC) (12 characters).
-            )
-        ]
-    )
-
-    try:
-        id3.append(maketag("TPUB", makepic(downloadpicture(song["LABEL_NAME"]))))
-    except Exception as e:
-        print("ERROR: no publisher?", e)
-
-    try:
-        id3.append(maketag("APIC", makepic(downloadpicture(song["ALB_PICTURE"]))))
-    except Exception as e:
-        print("ERROR: no album cover?", e)
-
-    try:
-        id3.append(
-            maketag("TORY", makeutf8(str(album_get("PHYSICAL_RELEASE_DATE")[:4])))
-        )
-    except Exception:
-        print("ERROR: no release date?")
-
-    try:
-        id3.append(
-            maketag("TYER", makeutf8(str(album_get("DIGITAL_RELEASE_DATE")[:4])))
-        )  # The 'Year' frame is a numeric string with a year of the recording. This frames is always four characters long (until the year 10000).
-    except Exception:
-        print("ERROR: no digital release date?")
-
-    try:
-        id3.append(maketag("TDAT", makeutf8(str(phyDate_DDMM))))
-    except Exception:
-        print("ERROR: no release date?")
-
-    id3data = b"".join(id3)
-    # >      big-endian
-    # s      char[]  bytes
-    # H      unsigned short  integer 2
-    # B      unsigned char   integer 1
-    # L      unsigned long   integer 4
-
-    hdr = struct.pack(
-        ">3sHBL",
-        "ID3".encode("ascii"),
-        0x300,  # version
-        0x00,  # flags
-        make28bit(len(id3data)),
-    )
-
-    fo.write(hdr)
-    fo.write(id3data)
 
 
 def get_song_url(track_token: str, format: str) -> str:
@@ -518,44 +357,19 @@ def download_song(song: dict, deezer_format: str, output_file: str) -> None:
         raise Exception("Error: Failed to get song URL")
 
     key = calcbfkey(song["SNG_ID"])
+    is_flac = deezer_format == "FLAC"
     try:
         with session.get(url, stream=True) as response:
             response.raise_for_status()
             with open(output_file, "w+b") as fo:
-                # Add song cover and first 30 seconds of unencrypted data
-                writeid3v2(fo, song)
                 decryptfile(response, key, fo)
-                writeid3v1_1(fo, song)
+        write_song_metadata(output_file, song, is_flac)
+    except MutagenError as e:
+        print(f"Warning: Could not write metadata to file: {e}")
     except Exception as e:
         raise DeezerApiException(f"Could not write song to disk: {e}") from e
 
-    # Tag the file
-    if deezer_format == "FLAC":
-        try:
-            from mutagen.flac import FLAC, Picture
-
-            audio = FLAC(output_file)
-            audio["title"] = song.get("SNG_TITLE", "")
-            audio["artist"] = song.get("ART_NAME", "")
-            audio["album"] = song.get("ALB_TITLE", "")
-            audio["tracknumber"] = str(song.get("TRACK_NUMBER", ""))
-            audio["date"] = album_Data.get("PHYSICAL_RELEASE_DATE", "")[:4]
-            audio["label"] = album_Data.get("LABEL_NAME", "")
-
-            # Add album art
-            pic_data = downloadpicture(song["ALB_PICTURE"])
-            image = Picture()
-            image.type = 3  # front cover
-            image.mime = "image/jpeg"
-            image.desc = "Cover"
-            image.data = pic_data
-            audio.add_picture(image)
-
-            audio.save()
-        except Exception as e:
-            print(f"Warning: could not write FLAC tags: {e}")
-    else:
-        print("Download finished: {}".format(output_file))
+    print("Download finished: {}".format(output_file))
 
 
 def get_song_infos_from_deezer_website(search_type, id):

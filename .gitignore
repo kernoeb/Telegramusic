@@ -1,2 +1,30 @@
-# Created by venv; see https://docs.python.org/3/library/venv.html
-*
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+bin/
+lib/
+include/
+pyvenv.cfg
+.python-version
+
+# IDE
+.idea/
+.ropeproject/
+.vscode/
+
+# OS
+.DS_Store
+
+# Ruff
+.ruff_cache/
+
+# Runtime
+tmp/
+temp_download/
+local_resources/*
+!local_resources/.gitkeep
+
+# Secrets
+token.env
