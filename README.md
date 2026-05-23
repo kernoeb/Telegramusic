@@ -135,6 +135,10 @@ By default, yt-dlp uses `JSInterp` (a Python-based JS interpreter) which is depr
 
 Using yt-dlp with **EJS** (a real JS runtime like Node/Deno/Bun) resolves the JS challenges but **does not solve datacenter IP blocking**. Without cookies or a residential proxy, many videos won’t work from a server.
 
+### SoundCloud limitations
+
+SoundCloud restricts full track downloads to Go+ subscribers. Without authentication, yt-dlp only retrieves ~30-second previews.
+
 #### Cookies workaround
 
 Add a `cookies.txt` in `./local_resources`.

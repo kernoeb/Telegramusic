@@ -86,7 +86,9 @@ YouTube has deployed 3 layers of protection that affect yt-dlp:
 
 **With EJS** (real JS runtime — Node/Deno/Bun): resolves JS challenges by executing YouTube's actual JS, gives access to more formats and clients. However, **does not solve datacenter IP blocking** — same `LOGIN_REQUIRED` errors occur.
 
-The core issue is IP-level blocking, not yt-dlp itself. Without cookies or a residential proxy, many videos won't work from a datacenter, regardless of runtime or bot configuration. The YouTube/SoundCloud code is kept in the codebase.
+The core issue is IP-level blocking, not yt-dlp itself. Without cookies or a residential proxy, many videos won't work from a datacenter, regardless of runtime or bot configuration.
+
+**SoundCloud** restricts full track downloads to Go+ subscribers. Without authentication, yt-dlp only retrieves ~30-second previews. The YouTube/SoundCloud code is kept in the codebase.
 
 ## Auxiliary Tools
 
