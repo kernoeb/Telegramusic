@@ -1,5 +1,5 @@
-aiogram==3.27.0
-requests==2.33.1
+aiogram==3.28.2
+requests==2.34.2
 mutagen==1.47.0
 Pillow==12.2.0
 yt-dlp==2026.3.17
@@ -7,4 +7,4 @@ aioshutil==1.6
 Unidecode==1.4.0
 aiohttp==3.13.5
 pycryptodome==3.23.0
-certifi==2026.4.22
+certifi==2026.5.20
