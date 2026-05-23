@@ -35,7 +35,7 @@ Search for music in `inline mode` :
 
 ![image](https://user-images.githubusercontent.com/24623168/141983477-b7692d78-134a-4176-98ba-d6388ac4b80b.png)
 
-## or send a Deezer / YouTube / SoundCloud link
+Or send a Deezer, YouTube or SoundCloud link directly.
 
 ## Configuration
 
@@ -73,8 +73,7 @@ BOT_LANG=fr
 
 ### Compressed files (zip)
 
-You can send a zip file with multiple tracks inside, the bot will send you a zip file with all the tracks downloaded and
-the cover.
+The bot can bundle downloaded tracks into a zip archive with the cover art included.
 
 In the `token.env` file, add the following line :
 
@@ -118,21 +117,40 @@ ENABLE_FLAC=1
 
 ### Do not send album art
 
-The default behavior is to send album cover and liks to the album and song. If you do not want to send it, set the `SEND_ALBUM_COVER` to `true`.
+By default, the bot sends the album cover along with links to the album and track. To disable this, set `SEND_ALBUM_COVER` to `false` :
 
 ```
-SEND_ALBUM_COVER=true
+SEND_ALBUM_COVER=false
 ```
 
-### Troubleshooting
+### YouTube limitations
 
-> "Sign in to confirm you’re not a bot. This helps protect our community. Learn more."
-> Please note that your account may be banned if you use this feature.
+YouTube has deployed multiple layers of protection that affect yt-dlp:
+
+1. **JS challenges (sig/nsig)** — stream URLs are encrypted by obfuscated JS in the YouTube player, changing with each update.
+2. **poToken (BotGuard)** — an attestation token proving the request comes from a real client (browser/mobile app).
+3. **Datacenter IP blocking** — YouTube detects server IPs and requires login ("Sign in to confirm you’re not a bot").
+
+By default, yt-dlp uses `JSInterp` (a Python-based JS interpreter) which is deprecated and no longer follows YouTube changes. It still works for some very popular videos, but fails with `LOGIN_REQUIRED` on many videos from datacenter IPs.
+
+Using yt-dlp with **EJS** (a real JS runtime like Node/Deno/Bun) resolves the JS challenges but **does not solve datacenter IP blocking**. Without cookies or a residential proxy, many videos won’t work from a server.
+
+#### Cookies workaround
 
 Add a `cookies.txt` in `./local_resources`.
-To generate this file, please see : <https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp>.
+To generate this file, please see: <https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp>.
 
-You don't need to restart the bot, it will automatically reload the cookies when downloading a YouTube video.
+You don’t need to restart the bot, it will automatically reload the cookies when downloading a YouTube video.
+
+> :warning: Please note that your account may be banned if you use this feature.
+
+### Other options
+
+| Variable | Default | Description |
+|---|---|---|
+| `DEEZER_PROXY` | | HTTPS proxy for Deezer requests |
+| `MAX_RETRIES` | `5` | Number of download retry attempts per track |
+| `YT_PLAYER_CLIENT` | `tv,web_safari,web_embedded,android_vr` | Comma-separated yt-dlp player clients |
 
 ### Example configuration
 
