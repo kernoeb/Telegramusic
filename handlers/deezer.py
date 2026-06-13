@@ -6,6 +6,7 @@ import os
 import re
 import ssl
 import traceback
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -14,6 +15,7 @@ import aiohttp
 import aioshutil
 import certifi  # SSL certificates
 import requests
+from PIL import Image
 from aiogram import F, Router, types
 from aiogram.types import (
     BufferedInputFile,
@@ -573,6 +575,25 @@ def get_album_metadata_from_api(album_id):
         raise
 
 
+def make_audio_thumbnail(cover_data: bytes) -> bytes | None:
+    """Build a Telegram-compliant audio thumbnail from cover bytes.
+
+    Telegram's server-side extraction of embedded album art is unreliable
+    (it intermittently shows no cover for some tracks), so we pass an explicit
+    thumbnail. Telegram requires it to be JPEG, <= 320x320 and < 200 kB."""
+    if not cover_data:
+        return None
+    try:
+        img = Image.open(BytesIO(cover_data))
+        img.thumbnail((320, 320))
+        buf = BytesIO()
+        img.convert("RGB").save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+    except Exception as e:
+        print(f"Warning: could not build audio thumbnail: {e}")
+        return None
+
+
 def get_track_caption(metadata):
     """Generates caption for a single track using imported __ function."""
     return (
@@ -617,6 +638,7 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
     song_path = dl_track_info["song_path"]
     duration = get_audio_duration(song_path)
     performer = ", ".join(metadata.get("artists_list", [metadata["artist"]]))
+    thumb_data = make_audio_thumbnail(metadata.get("cover_data"))
 
     if SEND_ALBUM_COVER:
         # Send cover photo first
@@ -635,6 +657,9 @@ async def send_track_audio(event: types.Message, metadata, dl_track_info):
         title=metadata["title"],
         performer=performer,
         duration=duration,
+        thumbnail=BufferedInputFile(thumb_data, filename="thumb.jpg")
+        if thumb_data
+        else None,
         disable_notification=True,
     )
 
@@ -647,6 +672,9 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
     )
 
     caption = get_album_caption(metadata)
+
+    # All tracks of an album share the same cover, so build the thumbnail once.
+    thumb_data = make_audio_thumbnail(metadata.get("cover_data"))
 
     if SEND_ALBUM_COVER:
         # Send cover photo first
@@ -700,6 +728,9 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
             title=title,
             performer=performer,
             duration=duration,
+            thumbnail=BufferedInputFile(thumb_data, filename="thumb.jpg")
+            if thumb_data
+            else None,
         )
         media_group.append(media_item)
         processed_files.append(
@@ -745,6 +776,9 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
                 title=item["title"],
                 performer=item["performer"],
                 duration=item["duration"],
+                thumbnail=BufferedInputFile(thumb_data, filename="thumb.jpg")
+                if thumb_data
+                else None,
                 disable_notification=True,
             )
             await asyncio.sleep(0.2)  # Small delay between messages
