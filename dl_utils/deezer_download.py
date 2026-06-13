@@ -205,6 +205,29 @@ def decryptfile(fh, key, fo):
         i += 1
 
 
+def get_artists(song: dict) -> str:
+    """Build the full artist string from the per-track ARTISTS array.
+
+    Deezer's ART_NAME only holds the lead artist, dropping co-main and
+    featured artists. The ARTISTS array carries every contributor with a
+    ROLE_ID ("0" = main, "5" = featured) and the correct casing, so we
+    rebuild "Main1, Main2 feat. Feat1, Feat2" from it. Falls back to
+    ART_NAME when the array is missing."""
+    artists = song.get("ARTISTS") or []
+    main, feat = [], []
+    for a in artists:
+        name = a.get("ART_NAME")
+        if not name:
+            continue
+        bucket = feat if a.get("ROLE_ID") == "5" else main
+        if name not in bucket:
+            bucket.append(name)
+    result = ", ".join(main)
+    if feat:
+        result = f"{result} feat. {', '.join(feat)}" if result else ", ".join(feat)
+    return result or song.get("ART_NAME", "")
+
+
 def write_song_metadata(output_file: str, song: dict, is_flac: bool) -> None:
     """Write metadata tags to a downloaded song file using mutagen.
     Ported from upstream kmille/deezer-downloader."""
@@ -247,7 +270,7 @@ def write_song_metadata(output_file: str, song: dict, is_flac: bool) -> None:
                 audio[key] = value
 
     audio = FLAC(output_file) if is_flac else MP3(output_file)
-    set_metadata(audio, "artist", song.get("ART_NAME"))
+    set_metadata(audio, "artist", get_artists(song))
     set_metadata(audio, "title", song.get("SNG_TITLE"))
     set_metadata(audio, "album", song.get("ALB_TITLE"))
     set_metadata(audio, "tracknumber", song.get("TRACK_NUMBER"))
