@@ -35,6 +35,7 @@ from dl_utils.deezer_download import (
     DeezerApiException,
     deezer_search,
     download_song,
+    get_artists,
     get_file_format,
     get_song_infos_from_deezer_website,
     init_deezer_session,
@@ -335,7 +336,9 @@ async def download_album(album_id, retries=MAX_RETRIES):
                     ti_copy = ti.copy()  # Work on a copy
                     ti_copy["song_path"] = str(sp)
                     ti_copy["song_name"] = ti_copy.get("SNG_TITLE", f"Track {track_id}")
-                    ti_copy["artist_name"] = ti_copy.get("ART_NAME", "Unknown Artist")
+                    ti_copy["artist_name"] = (
+                        get_artists(ti_copy) or "Unknown Artist"
+                    )
                     ti_copy["file_extension"] = fe
                     # Keep track number if available
                     if "TRACK_NUMBER" in ti:
@@ -681,17 +684,12 @@ async def send_album_audio(event: types.Message, metadata, dl_tracks_info):
             potential_id
         )
 
-        if api_track:
-            title = api_track.get("title", dl_info["song_name"])
-            # Get contributors from the specific track API data if possible
-            artists = [c["name"] for c in api_track.get("contributors", [])]
-            if not artists:  # Fallback to main album artist
-                artists = [metadata["artist"]]
-            performer = ", ".join(artists)
-        else:
-            # Fallback if no matching API data found
-            title = dl_info["song_name"]
-            performer = dl_info["artist_name"]  # Artist info from download step
+        # The album API endpoints don't expose per-track contributors, so the
+        # artist string built during download (from the website ARTISTS array,
+        # incl. featured artists) is authoritative. Only the title benefits
+        # from the API data.
+        title = api_track.get("title", dl_info["song_name"]) if api_track else dl_info["song_name"]
+        performer = dl_info["artist_name"]
 
         duration = get_audio_duration(song_path)
         file_input = FSInputFile(song_path)  # Use FSInputFile for media group
